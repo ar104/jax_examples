@@ -2,18 +2,17 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 from scipy.stats import norm
+import time
 
 
-_NORM_SD = 0.1
-
-
-def create_gm_dataset(n_examples: int, p=0.8, mu0=-1, mu1=1) -> np.array:
+def create_gm_dataset(n_examples: int, p=0.8, mu0=-1, sd0=0.1, mu1=1,
+                      sd1=0.1) -> np.array:
     '''Gaussian mixture dataset. Draw from one of two normal distributions
        with choice being dictated by a bernoulli distribution.
     '''
     latents = np.random.binomial(n=1, p=p, size=n_examples)
-    choice1 = np.random.normal(loc=mu0, scale=_NORM_SD, size=n_examples)
-    choice2 = np.random.normal(loc=mu1, scale=_NORM_SD, size=n_examples)
+    choice1 = np.random.normal(loc=mu0, scale=sd0, size=n_examples)
+    choice2 = np.random.normal(loc=mu1, scale=sd1, size=n_examples)
     return np.choose(latents, (choice1, choice2))
 
 
@@ -24,6 +23,7 @@ def em(examples, max_iters, tol):
     mu1 = +2.0
     sd1 = 1.0
     p = 0.5
+    start = time.time()
     for iter in range(max_iters):
         p_x_z_is_0 = norm.pdf(examples, loc=mu0, scale=sd0)
         p_x_z_is_1 = norm.pdf(examples, loc=mu1, scale=sd1)
@@ -51,16 +51,28 @@ def em(examples, max_iters, tol):
         if max_delta < tol:
             break
         p, mu0, sd0, mu1, sd1 = p_new, mu0_new, sd0_new, mu1_new, sd1_new
-        # print(f'{iter}: p={p}, mu0={mu0}, sd0={sd0}, mu1={mu1}, sd1={sd1}')
+    stop = time.time()
+    print(f'EM sec/iter = {(stop - start)/iter}')
     return p, mu0, sd0, mu1, sd1
 
 
-dataset = create_gm_dataset(n_examples=100000)
-print(em(dataset, 10, 0.001))
-fig, ax = plt.subplots()
-ax.hist(dataset, bins=200)
-ax.set_title('Observed Data Distribution')
-ax.set_xlabel('Value')
-ax.set_ylabel('Count')
+mu0, sd0, mu1, sd1, p = -1.0, 0.1, 1.0, 0.1, 0.8
+print(f'Model parameters = p={p}, mu0={mu0}, sd0={sd0}, mu1={mu1}, sd1={sd1}')
+dataset = create_gm_dataset(n_examples=1000000)
+p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = em(dataset, 10, 0.001)
+print(f'Fit parameters = p={p_fit}, mu0={mu0_fit}, sd0={sd0_fit}, '
+      f'mu1={mu1_fit}, sd1={sd1_fit}')
+fig, axes = plt.subplots(nrows=1, ncols=2)
+axes[0].hist(dataset, bins=200)
+axes[0].set_title('Observed Data Distribution')
+axes[0].set_xlabel('Value')
+axes[0].set_ylabel('Count')
+generated = create_gm_dataset(
+    n_examples=1000000, p=p_fit, mu0=mu0_fit, sd0=sd0_fit, mu1=mu1_fit,
+    sd1=sd1_fit)
+axes[1].hist(generated, bins=200)
+axes[1].set_title('Generated Data Distribution')
+axes[1].set_xlabel('Value')
+axes[1].set_ylabel('Count')
 # plt.show()
-# fig.savefig('em_data_distribution.png')
+fig.savefig('em_data_distribution.png')
