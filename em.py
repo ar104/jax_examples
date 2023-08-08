@@ -9,6 +9,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--jax', action='store_true')
+parser.add_argument('--examples', type=int, default=1000000)
 args = parser.parse_args()
 
 
@@ -119,7 +120,8 @@ def jax_em(examples, max_iters, tol):
 
 mu0, sd0, mu1, sd1, p = -1.0, 0.1, 1.0, 0.1, 0.8
 print(f'Model parameters = p={p}, mu0={mu0}, sd0={sd0}, mu1={mu1}, sd1={sd1}')
-dataset = create_gm_dataset(n_examples=1000000)
+print(f'Creating dataset with {args.examples} examples.')
+dataset = create_gm_dataset(n_examples=args.examples)
 if args.jax:
     p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = jax_em(dataset, 10, 0.001)
 else:
@@ -132,7 +134,7 @@ axes[0].set_title('Observed Data Distribution')
 axes[0].set_xlabel('Value')
 axes[0].set_ylabel('Count')
 generated = create_gm_dataset(
-    n_examples=1000000, p=p_fit, mu0=mu0_fit, sd0=sd0_fit, mu1=mu1_fit,
+    n_examples=args.examples, p=p_fit, mu0=mu0_fit, sd0=sd0_fit, mu1=mu1_fit,
     sd1=sd1_fit)
 axes[1].hist(generated, bins=200)
 axes[1].set_title('Generated Data Distribution')
