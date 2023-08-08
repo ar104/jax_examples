@@ -1,6 +1,7 @@
 import argparse
 import jax
 from jax import numpy as jnp
+from jax import config
 import matplotlib.pyplot as plt
 import math
 import numpy as np
@@ -11,6 +12,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--jax', action='store_true')
 parser.add_argument('--examples', type=int, default=1000000)
 args = parser.parse_args()
+
+_INIT_mu0 = -3.0
+_INIT_sd0 = 0.1
+_INIT_mu1 = +3.0
+_INIT_sd1 = 0.1
+_INIT_p = 0.01
 
 
 def create_gm_dataset(n_examples: int, p=0.8, mu0=-1, sd0=0.1, mu1=1,
@@ -26,11 +33,11 @@ def create_gm_dataset(n_examples: int, p=0.8, mu0=-1, sd0=0.1, mu1=1,
 
 def em(examples, max_iters, tol):
     ''' Expectation maximization implementation.'''
-    mu0 = -2.0
-    sd0 = 1.0
-    mu1 = +2.0
-    sd1 = 1.0
-    p = 0.5
+    mu0 = _INIT_mu0
+    sd0 = _INIT_sd0
+    mu1 = _INIT_mu1
+    sd1 = _INIT_sd1
+    p = _INIT_p
     start = time.time()
     for iter in range(1, 1 + max_iters):
         p_x_z_is_0 = norm.pdf(examples, loc=mu0, scale=sd0)
@@ -88,11 +95,11 @@ def jax_em_iter(examples, p, mu_0, sd_0, mu_1, sd_1):
 def jax_em(examples, max_iters, tol):
     ''' Expectation maximization implementation using JAX.'''
     examples = jax.device_put(examples)
-    mu0 = -5.0
-    sd0 = 2.0
-    mu1 = +5.0
-    sd1 = 2.0
-    p = 0.01
+    mu0 = _INIT_mu0
+    sd0 = _INIT_sd0
+    mu1 = _INIT_mu1
+    sd1 = _INIT_sd1
+    p = _INIT_p
     jited_core_loop = jax.jit(jax_em_iter)
     start = time.time()
     for iter in range(1, 1 + max_iters):
@@ -118,14 +125,16 @@ def jax_em(examples, max_iters, tol):
     return p, mu0, sd0, mu1, sd1
 
 
-mu0, sd0, mu1, sd1, p = -1.0, 0.1, 1.0, 0.1, 0.8
+mu0, sd0, mu1, sd1, p = -1.0, 0.5, 1.0, 0.5, 0.8
 print(f'Model parameters = p={p}, mu0={mu0}, sd0={sd0}, mu1={mu1}, sd1={sd1}')
 print(f'Creating dataset with {args.examples} examples.')
-dataset = create_gm_dataset(n_examples=args.examples)
+dataset = create_gm_dataset(n_examples=args.examples,
+                            p=p, mu0=mu0, sd0=sd0, mu1=mu1, sd1=sd1)
+print(f'Done, fitting ...')
 if args.jax:
-    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = jax_em(dataset, 10, 0.001)
+    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = jax_em(dataset, 100, 0.001)
 else:
-    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = em(dataset, 10, 0.001)
+    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = em(dataset, 100, 0.001)
 print(f'Fit parameters = p={p_fit}, mu0={mu0_fit}, sd0={sd0_fit}, '
       f'mu1={mu1_fit}, sd1={sd1_fit}')
 fig, axes = plt.subplots(nrows=1, ncols=2)
@@ -141,4 +150,7 @@ axes[1].set_title('Generated Data Distribution')
 axes[1].set_xlabel('Value')
 axes[1].set_ylabel('Count')
 # plt.show()
-fig.savefig('em_data_distribution.png')
+if args.jax:
+    fig.savefig('em_data_distribution_jax.png')
+else:
+    fig.savefig('em_data_distribution.png')
