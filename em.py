@@ -63,33 +63,46 @@ def em(examples, max_iters, tol):
     return p, mu0, sd0, mu1, sd1
 
 
+def jax_em_iter(examples, p, mu_0, sd_0, mu_1, sd_1):
+    p_x_z_is_0 = jax.scipy.stats.norm.pdf(examples, loc=mu0, scale=sd0)
+    p_x_z_is_1 = jax.scipy.stats.norm.pdf(examples, loc=mu1, scale=sd1)
+    p_x = p_x_z_is_0*(1 - p) + p_x_z_is_1*p
+    # Setup latent distribution using current estimate.
+    p_z_given_x = p_x_z_is_1*p/p_x
+    p_new = jnp.mean(p_z_given_x)
+    p_not_z_given_x = 1.0 - p_z_given_x
+    # Maximize expectation.
+    sum_p_given_x = jnp.sum(p_z_given_x)
+    sum_not_p_given_x = jnp.sum(p_not_z_given_x)
+    mu1_new = jnp.dot(p_z_given_x, examples)/sum_p_given_x
+    mu0_new = jnp.dot(p_not_z_given_x, examples)/sum_not_p_given_x
+    sd1_new = jnp.sqrt(
+        jnp.dot(p_z_given_x, (examples - mu1_new)**2)/sum_p_given_x)
+    sd0_new = jnp.sqrt(
+        jnp.dot(p_not_z_given_x, (examples - mu0_new) ** 2) /
+        sum_not_p_given_x)
+    return p_new, mu0_new, sd0_new, mu1_new, sd1_new
+
+
 def jax_em(examples, max_iters, tol):
     ''' Expectation maximization implementation using JAX.'''
     examples = jax.device_put(examples)
-    mu0 = -2.0
-    sd0 = 1.0
-    mu1 = +2.0
-    sd1 = 1.0
-    p = 0.5
+    mu0 = -5.0
+    sd0 = 2.0
+    mu1 = +5.0
+    sd1 = 2.0
+    p = 0.01
+    jited_core_loop = jax.jit(jax_em_iter)
     start = time.time()
     for iter in range(max_iters):
-        p_x_z_is_0 = jax.scipy.stats.norm.pdf(examples, loc=mu0, scale=sd0)
-        p_x_z_is_1 = jax.scipy.stats.norm.pdf(examples, loc=mu1, scale=sd1)
-        p_x = p_x_z_is_0*(1 - p) + p_x_z_is_1*p
-        # Setup latent distribution using current estimate.
-        p_z_given_x = p_x_z_is_1*p/p_x
-        p_new = jnp.mean(p_z_given_x).item()
-        p_not_z_given_x = 1.0 - p_z_given_x
-        # Maximize expectation.
-        sum_p_given_x = jnp.sum(p_z_given_x).item()
-        sum_not_p_given_x = jnp.sum(p_not_z_given_x).item()
-        mu1_new = jnp.dot(p_z_given_x, examples).item()/sum_p_given_x
-        mu0_new = jnp.dot(p_not_z_given_x, examples).item()/sum_not_p_given_x
-        sd1_new = math.sqrt(
-            jnp.dot(p_z_given_x, (examples - mu1_new)**2).item()/sum_p_given_x)
-        sd0_new = math.sqrt(
-            jnp.dot(p_not_z_given_x, (examples - mu0_new) ** 2).item() /
-            sum_not_p_given_x)
+        p_new, mu0_new, sd0_new, mu1_new, sd1_new = jited_core_loop(
+            examples, p, mu0, sd0, mu1, sd1)
+        p_new, mu0_new, sd0_new, mu1_new, sd1_new = (
+            p_new.item(),
+            mu0_new.item(),
+            sd0_new.item(),
+            mu1_new.item(),
+            sd1_new.item())
         max_delta = max(
             abs(p_new - p),
             abs(mu0_new - mu0),
