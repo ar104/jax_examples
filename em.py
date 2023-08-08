@@ -32,7 +32,7 @@ def em(examples, max_iters, tol):
     sd1 = 1.0
     p = 0.5
     start = time.time()
-    for iter in range(max_iters):
+    for iter in range(1, 1 + max_iters):
         p_x_z_is_0 = norm.pdf(examples, loc=mu0, scale=sd0)
         p_x_z_is_1 = norm.pdf(examples, loc=mu1, scale=sd1)
         p_x = p_x_z_is_0*(1 - p) + p_x_z_is_1*p
@@ -60,7 +60,7 @@ def em(examples, max_iters, tol):
             break
         p, mu0, sd0, mu1, sd1 = p_new, mu0_new, sd0_new, mu1_new, sd1_new
     stop = time.time()
-    print(f'EM sec/iter = {(stop - start)/iter}')
+    print(f'iters = {iter} EM sec/iter = {(stop - start)/iter}')
     return p, mu0, sd0, mu1, sd1
 
 
@@ -95,7 +95,7 @@ def jax_em(examples, max_iters, tol):
     p = 0.01
     jited_core_loop = jax.jit(jax_em_iter)
     start = time.time()
-    for iter in range(max_iters):
+    for iter in range(1, 1 + max_iters):
         p_new, mu0_new, sd0_new, mu1_new, sd1_new = jited_core_loop(
             examples, p, mu0, sd0, mu1, sd1)
         p_new, mu0_new, sd0_new, mu1_new, sd1_new = (
@@ -114,7 +114,7 @@ def jax_em(examples, max_iters, tol):
             break
         p, mu0, sd0, mu1, sd1 = p_new, mu0_new, sd0_new, mu1_new, sd1_new
     stop = time.time()
-    print(f'JAX EM sec/iter = {(stop - start)/iter}')
+    print(f'JAX iters = {iter} EM sec/iter = {(stop - start)/iter}')
     return p, mu0, sd0, mu1, sd1
 
 
