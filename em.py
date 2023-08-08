@@ -1,8 +1,15 @@
+import argparse
+import jax
+from jax import numpy as jnp
 import matplotlib.pyplot as plt
 import math
 import numpy as np
 from scipy.stats import norm
 import time
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--jax', action='store_true')
+args = parser.parse_args()
 
 
 def create_gm_dataset(n_examples: int, p=0.8, mu0=-1, sd0=0.1, mu1=1,
@@ -56,10 +63,54 @@ def em(examples, max_iters, tol):
     return p, mu0, sd0, mu1, sd1
 
 
+def jax_em(examples, max_iters, tol):
+    ''' Expectation maximization implementation using JAX.'''
+    examples = jax.device_put(examples)
+    mu0 = -2.0
+    sd0 = 1.0
+    mu1 = +2.0
+    sd1 = 1.0
+    p = 0.5
+    start = time.time()
+    for iter in range(max_iters):
+        p_x_z_is_0 = jax.scipy.stats.norm.pdf(examples, loc=mu0, scale=sd0)
+        p_x_z_is_1 = jax.scipy.stats.norm.pdf(examples, loc=mu1, scale=sd1)
+        p_x = p_x_z_is_0*(1 - p) + p_x_z_is_1*p
+        # Setup latent distribution using current estimate.
+        p_z_given_x = p_x_z_is_1*p/p_x
+        p_new = jnp.mean(p_z_given_x).item()
+        p_not_z_given_x = 1.0 - p_z_given_x
+        # Maximize expectation.
+        sum_p_given_x = jnp.sum(p_z_given_x).item()
+        sum_not_p_given_x = jnp.sum(p_not_z_given_x).item()
+        mu1_new = jnp.dot(p_z_given_x, examples).item()/sum_p_given_x
+        mu0_new = jnp.dot(p_not_z_given_x, examples).item()/sum_not_p_given_x
+        sd1_new = math.sqrt(
+            jnp.dot(p_z_given_x, (examples - mu1_new)**2).item()/sum_p_given_x)
+        sd0_new = math.sqrt(
+            jnp.dot(p_not_z_given_x, (examples - mu0_new) ** 2).item() /
+            sum_not_p_given_x)
+        max_delta = max(
+            abs(p_new - p),
+            abs(mu0_new - mu0),
+            abs(mu1_new - mu1),
+            abs(sd0_new - sd0),
+            abs(sd1_new - sd1))
+        if max_delta < tol:
+            break
+        p, mu0, sd0, mu1, sd1 = p_new, mu0_new, sd0_new, mu1_new, sd1_new
+    stop = time.time()
+    print(f'JAX EM sec/iter = {(stop - start)/iter}')
+    return p, mu0, sd0, mu1, sd1
+
+
 mu0, sd0, mu1, sd1, p = -1.0, 0.1, 1.0, 0.1, 0.8
 print(f'Model parameters = p={p}, mu0={mu0}, sd0={sd0}, mu1={mu1}, sd1={sd1}')
 dataset = create_gm_dataset(n_examples=1000000)
-p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = em(dataset, 10, 0.001)
+if args.jax:
+    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = jax_em(dataset, 10, 0.001)
+else:
+    p_fit, mu0_fit, sd0_fit, mu1_fit, sd1_fit = em(dataset, 10, 0.001)
 print(f'Fit parameters = p={p_fit}, mu0={mu0_fit}, sd0={sd0_fit}, '
       f'mu1={mu1_fit}, sd1={sd1_fit}')
 fig, axes = plt.subplots(nrows=1, ncols=2)
