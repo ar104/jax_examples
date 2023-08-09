@@ -10,7 +10,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--jax', action='store_true')
-parser.add_argument('--examples', type=int, default=1000000)
+parser.add_argument('--examples', type=int, default=10000000)
 args = parser.parse_args()
 
 _INIT_mu0 = -3.0
