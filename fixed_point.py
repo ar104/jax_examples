@@ -30,6 +30,7 @@ class AndersonFixedPoint:
         self.tol = tol
         key = random.PRNGKey(0)
         # N(0, 0.01) - important for contractive mapping.
+        # sd should be set per vector dimension.
         self.projection = random.normal(
             key, shape=(features, features))/100
         self.max_iter = max_iter
