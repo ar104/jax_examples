@@ -95,6 +95,7 @@ def jax_em_iter(examples, p, mu_0, sd_0, mu_1, sd_1):
 def jax_em(examples, max_iters, tol):
     ''' Expectation maximization implementation using JAX.'''
     examples = jax.device_put(examples)
+    print(f'Jax device = {examples.device()}')
     mu0 = _INIT_mu0
     sd0 = _INIT_sd0
     mu1 = _INIT_mu1
