@@ -3,17 +3,17 @@ import jax.numpy as jnp
 import time
 from tqdm import tqdm
 
-_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
+_DATASET = '/home/aroy_mailbox'
 _DIM = 32
-_EPOCH_EXAMPLES = 320
-_BATCH = 32
-_LR = 1e-3
+_EPOCH_EXAMPLES = 1024000
+_BATCH = 128
+_LR = 1e-5
 _LAMBDA = 1e-8
 _EPSILON = 1e-10
 
 
 start = time.time()
-data = jnp.load(_DATASET + '\\tensors_history.npz')
+data = jnp.load(_DATASET + '/tensors_history.npz')
 items = data['items']
 seq_lengths = data['seq_lengths']
 print(f'Loaded arrays from disk in {time.time() - start} secs.')
@@ -52,7 +52,7 @@ def train_batch(seq_items_batch):
     return (loss/len(seq_items_batch))/n_items
 
 
-for epoch in range(5):
+for epoch in range(40):
     train_indices = jax.random.choice(key, n_items, (_EPOCH_EXAMPLES,))
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
@@ -81,4 +81,5 @@ for epoch in range(5):
             avg_loss = 0.8*avg_loss + 0.2*loss
     print(f'Epoch = {epoch} loss = {avg_loss:.4f}')
 
-jnp.savez(_DATASET + '//embeddings.npz', item_embeddings=item_embeddings)
+    jnp.savez(_DATASET + f'/embeddings_{epoch}.npz',
+              item_embeddings=item_embeddings)
