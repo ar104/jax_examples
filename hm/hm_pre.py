@@ -35,6 +35,7 @@ training_features = grouped_transactions.to_dict()
 del grouped_transactions
 del transactions
 training_examples_items = []
+training_examples_customer = []
 seq_length = []
 
 
@@ -45,6 +46,7 @@ def parse_time(s):
 pbar = tqdm(training_features.keys())
 pbar.set_description('Generate Samples')
 for k in pbar:
+    training_examples_customer.append(k)
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
     history = [item_mapping[e[0]] for e in purchases[-HISTORY:]]
@@ -59,4 +61,7 @@ items = np.array(training_examples_items)
 seq_lengths = np.array(seq_length)
 np.savez(_DATASET + '//tensors_history.npz', items=items,
          seq_lengths=seq_lengths)
+training_examples_customer = pd.DataFrame(
+    {'customer_id': training_examples_customer})
+training_examples_customer.to_csv(_DATASET + '//cid_map.csv', index=False)
 print(f'items {items.shape} seq_lengths {seq_lengths.shape}')
