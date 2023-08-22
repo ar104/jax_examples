@@ -13,7 +13,7 @@ _LR = 1e-5
 _LAMBDA = 1e-8
 _EPSILON = 1e-10
 
-
+print(jax.devices())
 start = time.time()
 data = jnp.load(_DATASET + '/tensors_history.npz')
 items = data['items']
