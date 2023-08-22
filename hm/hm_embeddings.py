@@ -74,7 +74,7 @@ def fwd_batch_opt_core(batch_size, input_embeddings, flat_items, flat_map):
     return loss
 
 
-# Note jittable due to dynamic repeat.
+# Not jittable due to dynamic repeat.
 def fwd_batch_opt(
         input_embeddings, seq_items_batch, seq_lengths_batch: jnp.ndarray):
     batch_size = len(seq_items_batch)
