@@ -8,7 +8,7 @@ from tqdm import tqdm
 _DATASET = '/home/aroy_mailbox'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
-_BATCH = 128
+_BATCH = 4096
 _LR = 1e-5
 _LAMBDA = 1e-8
 _EPSILON = 1e-10
