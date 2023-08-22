@@ -59,13 +59,13 @@ grad_fwd_batch = jax.grad(fwd_batch, argnums=0)
 # Optimized (vectorized computation over all examples in batch)
 ##########################################################
 
-@partial(jax.jit, static_argnames=['batch_size'])
+@jax.jit
 def fwd_batch_opt_core(
-        batch_size, input_embeddings, flat_items, flat_map, seq_lengths_batch):
+        input_embeddings, flat_items, flat_map, seq_lengths_batch):
     flat_item_embeddings = input_embeddings[flat_items]
     # Compute user embedding as mean of all purchased item embeddings.
     user_embeddings = jax.ops.segment_sum(
-        flat_item_embeddings, flat_map, num_segments=batch_size,
+        flat_item_embeddings, flat_map, num_segments=_BATCH,
         indices_are_sorted=True)
     user_embeddings /= jnp.expand_dims(seq_lengths_batch, axis=-1)
     logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
@@ -84,7 +84,7 @@ def fwd_batch_opt(
     # Map back to example.
     flat_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
     return fwd_batch_opt_core(
-        batch_size, input_embeddings, flat_items, flat_map, seq_lengths_batch)
+        input_embeddings, flat_items, flat_map, seq_lengths_batch)
 
 
 grad_fwd_batch_opt = jax.grad(fwd_batch_opt, argnums=0)
@@ -126,8 +126,8 @@ for epoch in range(40):
                 pbar.set_description(f'epoch {epoch} avg loss {avg_loss:.4f}')
 
     if len(seq_items_batch) > 0:
-        # loss = train_batch(seq_items_batch)
-        loss = train_batch_opt(seq_items_batch, jnp.asarray(seq_lengths_batch))
+        # Can't vectorize partial batch.
+        loss = train_batch(seq_items_batch)
         if avg_loss is None:
             avg_loss = loss
         else:
