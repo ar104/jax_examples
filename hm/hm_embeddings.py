@@ -60,13 +60,14 @@ grad_fwd_batch = jax.grad(fwd_batch, argnums=0)
 ##########################################################
 
 @partial(jax.jit, static_argnames=['batch_size'])
-def fwd_batch_opt_core(batch_size, input_embeddings, flat_items, flat_map):
+def fwd_batch_opt_core(
+        batch_size, input_embeddings, flat_items, flat_map, seq_lengths_batch):
     flat_item_embeddings = input_embeddings[flat_items]
     # Compute user embedding as mean of all purchased item embeddings.
     user_embeddings = jax.ops.segment_sum(
         flat_item_embeddings, flat_map, num_segments=batch_size,
         indices_are_sorted=True)
-    user_embeddings = user_embeddings / batch_size
+    user_embeddings /= jnp.expand_dims(seq_lengths_batch, axis=-1)
     logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
     logits = logits.at[flat_map, flat_items].multiply(-1.0)
     nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
@@ -83,7 +84,7 @@ def fwd_batch_opt(
     # Map back to example.
     flat_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
     return fwd_batch_opt_core(
-        batch_size, input_embeddings, flat_items, flat_map)
+        batch_size, input_embeddings, flat_items, flat_map, seq_lengths_batch)
 
 
 grad_fwd_batch_opt = jax.grad(fwd_batch_opt, argnums=0)
