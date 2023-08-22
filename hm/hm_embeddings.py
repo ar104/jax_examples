@@ -28,6 +28,7 @@ print(items.shape, seq_lengths.shape)
 
 
 # Unoptimized (iterate over examples in batch)
+#########################################################
 @jax.jit
 def fwd(input_embeddings, seq_items):
     user_embedding = jnp.mean(input_embeddings[seq_items], axis=0)
@@ -56,7 +57,24 @@ grad_fwd_batch = jax.grad(fwd_batch, argnums=0)
 
 
 # Optimized (vectorized computation over all examples in batch)
-# Note: not jittable
+##########################################################
+
+@partial(jax.jit, static_argnames=['batch_size'])
+def fwd_batch_opt_core(batch_size, input_embeddings, flat_items, flat_map):
+    flat_item_embeddings = input_embeddings[flat_items]
+    # Compute user embedding as mean of all purchased item embeddings.
+    user_embeddings = jax.ops.segment_sum(
+        flat_item_embeddings, flat_map, num_segments=batch_size,
+        indices_are_sorted=True)
+    user_embeddings = user_embeddings / batch_size
+    logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
+    logits = logits.at[flat_map, flat_items].multiply(-1.0)
+    nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
+    loss = jnp.sum(nll, axis=0)
+    return loss
+
+
+# Note jittable due to dynamic repeat.
 def fwd_batch_opt(
         input_embeddings, seq_items_batch, seq_lengths_batch: jnp.ndarray):
     batch_size = len(seq_items_batch)
@@ -64,16 +82,8 @@ def fwd_batch_opt(
     flat_items = jnp.concatenate(seq_items_batch, axis=0)
     # Map back to example.
     flat_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
-    # Compute user embedding as mean of all purchased item embeddings.
-    flat_item_embeddings = input_embeddings[flat_items]
-    user_embeddings = jax.ops.segment_sum(
-        flat_item_embeddings, flat_map, indices_are_sorted=True)
-    user_embeddings = user_embeddings / jnp.expand_dims(batch_size, -1)
-    logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
-    logits = logits.at[flat_map, flat_items].multiply(-1.0)
-    nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
-    loss = jnp.sum(nll, axis=0)
-    return loss
+    return fwd_batch_opt_core(
+        batch_size, input_embeddings, flat_items, flat_map)
 
 
 grad_fwd_batch_opt = jax.grad(fwd_batch_opt, argnums=0)
