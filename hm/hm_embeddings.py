@@ -1,7 +1,6 @@
 from functools import partial
 import jax
 import jax.numpy as jnp
-import jax.lax as lax
 import time
 from tqdm import tqdm
 
@@ -92,15 +91,13 @@ grad_fwd_batch_opt = jax.grad(fwd_batch_opt, argnums=0)
 
 def train_batch_opt(seq_items_batch, seq_lengths_batch: jnp.ndarray):
     global item_embeddings
-    loss = fwd_batch_opt(item_embeddings, seq_items_batch, seq_lengths_batch)
     grad_loss = grad_fwd_batch_opt(
         item_embeddings, seq_items_batch, seq_lengths_batch)
     item_embeddings = (1.0 - _LAMBDA)*item_embeddings - _LR*grad_loss
-    return (loss/seq_lengths_batch.shape[0])/n_items
 
 
+train_indices = jax.random.choice(key, items.shape[0], (_EPOCH_EXAMPLES,))
 for epoch in range(40):
-    train_indices = jax.random.choice(key, n_items, (_EPOCH_EXAMPLES,))
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
     batches = 0
@@ -112,18 +109,21 @@ for epoch in range(40):
         seq_items_batch.append(seq_items)
         seq_lengths_batch.append(seq_lengths[index])
         if len(seq_items_batch) == _BATCH:
-            # loss = train_batch(seq_items_batch)
-            loss = train_batch_opt(seq_items_batch,
-                                   jnp.asarray(seq_lengths_batch))
-            if avg_loss is None:
-                avg_loss = loss
-            else:
-                avg_loss = 0.8*avg_loss + 0.2*loss
-            batches += 1
-            seq_items_batch = []
+            seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
             seq_lengths_batch = []
-            if batches % 1 == 0:
+            loss = train_batch_opt(seq_items_batch, seq_lengths_batch_array)
+            batches += 1
+            # Update displayed loss.
+            if batches % 10 == 0:
+                loss = fwd_batch_opt(
+                    item_embeddings, seq_items_batch, seq_lengths_batch_array)
+                loss = (loss/seq_lengths_batch_array.shape[0])/n_items
+                if avg_loss is None:
+                    avg_loss = loss
+                else:
+                    avg_loss = 0.8*avg_loss + 0.2*loss
                 pbar.set_description(f'epoch {epoch} avg loss {avg_loss:.4f}')
+            seq_items_batch = []
 
     if len(seq_items_batch) > 0:
         # Can't vectorize partial batch.
