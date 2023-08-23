@@ -105,7 +105,7 @@ else:
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 
-for epoch in range(40):
+for epoch in range(100):
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
     batches = 0
