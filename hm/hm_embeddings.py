@@ -1,16 +1,22 @@
-from functools import partial
+import argparse
 import jax
 import jax.numpy as jnp
+from jaxopt import OptaxSolver
+import optax
 import time
 from tqdm import tqdm
 
-_DATASET = '/home/aroy_mailbox'
+_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
 _LR = 1e-5
 _LAMBDA = 1e-8
 _EPSILON = 1e-10
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--optimizer', type=str, default='SGD', help='SGD or Adam')
+args = parser.parse_args()
 
 print(jax.devices())
 start = time.time()
@@ -86,17 +92,19 @@ def fwd_batch_opt(
         input_embeddings, flat_items, flat_map, seq_lengths_batch)
 
 
-grad_fwd_batch_opt = jax.grad(fwd_batch_opt, argnums=0)
-
-
-def train_batch_opt(seq_items_batch, seq_lengths_batch: jnp.ndarray):
-    global item_embeddings
-    grad_loss = grad_fwd_batch_opt(
-        item_embeddings, seq_items_batch, seq_lengths_batch)
-    item_embeddings = (1.0 - _LAMBDA)*item_embeddings - _LR*grad_loss
-
-
 train_indices = jax.random.choice(key, items.shape[0], (_EPOCH_EXAMPLES,))
+
+# Initialize optimizer.
+if args.optimizer == 'SGD':
+    opt = optax.sgd(_LR)
+elif args.optimizer == 'Adam':
+    opt = optax.adam(_LR)
+else:
+    print(f'Unknown optimizer {args.optimizer}')
+    exit(-1)
+solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
+solver_initialized = False
+
 for epoch in range(40):
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
@@ -111,7 +119,16 @@ for epoch in range(40):
         if len(seq_items_batch) == _BATCH:
             seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
             seq_lengths_batch = []
-            loss = train_batch_opt(seq_items_batch, seq_lengths_batch_array)
+            if solver_initialized:
+                item_embeddings, state = solver.update(
+                    params=item_embeddings,
+                    seq_items_batch=seq_items_batch,
+                    seq_lengths_batch=seq_lengths_batch_array)
+            else:
+                state = solver.init_state(
+                    init_params=item_embeddings,
+                    seq_items_batch=seq_items_batch,
+                    seq_lengths_batch=seq_lengths_batch_array)
             batches += 1
             # Update displayed loss.
             if batches % 10 == 0:
@@ -126,8 +143,11 @@ for epoch in range(40):
             seq_items_batch = []
 
     if len(seq_items_batch) > 0:
-        # Can't vectorize partial batch.
-        loss = train_batch(seq_items_batch)
+        # Use partial batch to compute loss metric only.
+        seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
+        loss = fwd_batch_opt(
+            item_embeddings, seq_items_batch, seq_lengths_batch_array)
+        loss = (loss/seq_lengths_batch_array.shape[0])/n_items
         if avg_loss is None:
             avg_loss = loss
         else:
