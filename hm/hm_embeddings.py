@@ -6,7 +6,7 @@ import optax
 import time
 from tqdm import tqdm
 
-_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
+_DATASET = '/home/aroy_mailbox'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
@@ -122,6 +122,7 @@ for epoch in range(100):
             if solver_initialized:
                 item_embeddings, state = solver.update(
                     params=item_embeddings,
+                    state=state,
                     seq_items_batch=seq_items_batch,
                     seq_lengths_batch=seq_lengths_batch_array)
             else:
@@ -129,6 +130,7 @@ for epoch in range(100):
                     init_params=item_embeddings,
                     seq_items_batch=seq_items_batch,
                     seq_lengths_batch=seq_lengths_batch_array)
+                solver_initialized = True
             batches += 1
             # Update displayed loss.
             if batches % 10 == 0:
