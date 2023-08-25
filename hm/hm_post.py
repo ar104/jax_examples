@@ -52,9 +52,9 @@ def process_batch(
         topk_batch = topk_batch_opt(
             embeddings, seq_items_batch, jnp.asarray(seq_lengths_batch))
         topk_batch = topk_batch.tolist()
-        # for cid, topk_list in zip(cid_batch, topk_batch):
-        #    topk = [str(mapping[e]) for e in topk_list]
-        #    predictions.write(cid + ',' + ' '.join(topk) + '\n')
+        for cid, topk_list in zip(cid_batch, topk_batch):
+            topk = [str(mapping[e]) for e in topk_list]
+            predictions.write(cid + ',' + ' '.join(topk) + '\n')
     else:
         for cid, history in zip(cid_batch, seq_items_batch):
             topk_list = get_topk(embeddings[history], embeddings)
@@ -90,6 +90,8 @@ with open(_DATASET + '\\predictions.csv', 'w') as predictions:
     for index, cid in enumerate(pbar):
         history_length = min(seq_lengths[index], _HISTORY)
         item_history = items[index][-history_length:]
+        for i in item_history:
+            item_freq[i] += 1
         seq_items_batch.append(item_history)
         seq_lengths_batch.append(history_length)
         cid_batch.append(cid)
