@@ -6,16 +6,16 @@ import optax
 import time
 from tqdm import tqdm
 
-_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
+_DATASET = '/home/aroy_mailbox'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
-_LR = 1e-5
+_LR = 1e-4
 _LAMBDA = 1e-8
 _EPSILON = 1e-10
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--optimizer', type=str, default='SGD', help='SGD or Adam')
+parser.add_argument('--optimizer', type=str, default='Adam', help='SGD or Adam')
 parser.add_argument('--start_epoch', type=int,
                     default=-1, help='Load from epoch')
 args = parser.parse_args()
