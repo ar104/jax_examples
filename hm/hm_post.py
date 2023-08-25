@@ -88,12 +88,12 @@ with open(_DATASET + '\\predictions.csv', 'w') as predictions:
     seq_lengths_batch = []
     cid_batch = []
     for index, cid in enumerate(pbar):
-        history_length = min(seq_lengths[index], _HISTORY)
-        item_history = items[index][-history_length:]
+        item_history = items[index][:seq_lengths[index]]
+        item_history = item_history[-_HISTORY:]
         for i in item_history:
             item_freq[i] += 1
         seq_items_batch.append(item_history)
-        seq_lengths_batch.append(history_length)
+        seq_lengths_batch.append(item_history.shape[0])
         cid_batch.append(cid)
         if len(seq_items_batch) == _BATCH:
             process_batch(embeddings, seq_items_batch,
@@ -108,7 +108,7 @@ with open(_DATASET + '\\predictions.csv', 'w') as predictions:
     global_top_k = list(item_freq.items())
     global_top_k.sort(key=lambda e: e[1], reverse=True)
     global_top_k = global_top_k[:_K]
-    global_top_k = [e[0] for e in global_top_k]
+    global_top_k = [str(mapping[e[0]]) for e in global_top_k]
     pbar = tqdm(missing_customers)
     pbar.set_description('Missing customers')
     for cid in pbar:
