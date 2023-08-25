@@ -6,7 +6,7 @@ import optax
 import time
 from tqdm import tqdm
 
-_DATASET = '/home/aroy_mailbox'
+_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
@@ -16,6 +16,8 @@ _EPSILON = 1e-10
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--optimizer', type=str, default='SGD', help='SGD or Adam')
+parser.add_argument('--start_epoch', type=int,
+                    default=-1, help='Load from epoch')
 args = parser.parse_args()
 
 print(jax.devices())
@@ -26,14 +28,21 @@ seq_lengths = data['seq_lengths']
 print(f'Loaded arrays from disk in {time.time() - start} secs.')
 
 n_items = int(jnp.max(items)) + 1
-print(f'Initializing embeddings for {n_items} items')
 key = jax.random.PRNGKey(42)
-item_embeddings = jax.random.normal(key, shape=(n_items, _DIM))/100
-print(items.shape, seq_lengths.shape)
-
+item_embeddings = None
+if args.start_epoch == -1:
+    print(f'Initializing embeddings for {n_items} items')
+    item_embeddings = jax.random.normal(key, shape=(n_items, _DIM))/100
+else:
+    print(f'Loading embeddings from checkpoint.')
+    checkpoint = jnp.load(_DATASET + f'embeddings_{args.start_epoch}.npz')
+    item_embeddings = checkpoint['item_embeddings']
+print(items.shape, seq_lengths.shape, item_embeddings.shape)
 
 # Unoptimized (iterate over examples in batch)
 #########################################################
+
+
 @jax.jit
 def fwd(input_embeddings, seq_items):
     user_embedding = jnp.mean(input_embeddings[seq_items], axis=0)
@@ -64,6 +73,7 @@ grad_fwd_batch = jax.grad(fwd_batch, argnums=0)
 # Optimized (vectorized computation over all examples in batch)
 ##########################################################
 
+
 @jax.jit
 def fwd_batch_opt_core(
         input_embeddings, flat_items, flat_map, seq_lengths_batch):
@@ -73,7 +83,7 @@ def fwd_batch_opt_core(
         flat_item_embeddings, flat_map, num_segments=_BATCH,
         indices_are_sorted=True)
     user_embeddings /= jnp.expand_dims(seq_lengths_batch, axis=-1)
-    logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
+    logits = jnp.einsum('ij,kj->ki', input_embeddings, user_embeddings)
     logits = logits.at[flat_map, flat_items].multiply(-1.0)
     nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
     loss = jnp.sum(nll, axis=0)
@@ -105,7 +115,8 @@ else:
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 
-for epoch in range(100):
+start_epoch = max(0, args.start_epoch)
+for epoch in range(start_epoch, 100):
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
     batches = 0
