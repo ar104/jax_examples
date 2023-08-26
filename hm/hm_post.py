@@ -61,8 +61,9 @@ def process_batch(
         for cid, history, past in zip(
                 cid_batch, seq_items_batch, seq_items_batch):
             topk_list = get_topk(embeddings[history], embeddings)
+            topk_list = [e.item() for e in topk_list]
             precision = len(set(topk_list).intersection(set(past)))/_K
-            topk = [str(mapping[e.item()]) for e in topk_list]
+            topk = [str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     return precision
 
