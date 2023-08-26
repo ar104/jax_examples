@@ -6,7 +6,7 @@ import optax
 import time
 from tqdm import tqdm
 
-_DATASET = '/home/aroy_mailbox'
+_DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
@@ -83,7 +83,9 @@ def fwd_batch_opt_core(
         flat_item_embeddings, flat_map, num_segments=_BATCH,
         indices_are_sorted=True)
     user_embeddings /= jnp.expand_dims(seq_lengths_batch, axis=-1)
-    logits = jnp.einsum('ij,kj->ki', input_embeddings, user_embeddings)
+    # Note: negation in next line is reversed for positive examples
+    # in the following line.
+    logits = -jnp.einsum('ij,kj->ki', input_embeddings, user_embeddings)
     logits = logits.at[flat_map, flat_items].multiply(-1.0)
     nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
     loss = jnp.sum(nll, axis=0)

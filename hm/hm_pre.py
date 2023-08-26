@@ -49,12 +49,14 @@ for k in pbar:
     training_examples_customer.append(k)
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
-    history = [item_mapping[e[0]] for e in purchases[-HISTORY:]]
-    seq_length.append(len(history))
-    short = HISTORY - len(history)
+    purchases = training_features[k][-HISTORY:]
+    purchases = list(set(purchases))
+    purchases = [item_mapping[e[0]] for e in purchases]
+    seq_length.append(len(purchases))   
+    short = HISTORY - len(purchases)
     if short > 0:
-        history.extend([-1]*short)
-    training_examples_items.append(history)
+        purchases.extend([-1]*short)
+    training_examples_items.append(purchases)
 
 del training_features
 items = np.array(training_examples_items)

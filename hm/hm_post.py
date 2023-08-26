@@ -89,6 +89,7 @@ with open(_DATASET + '\\predictions.csv', 'w') as predictions:
     cid_batch = []
     for index, cid in enumerate(pbar):
         item_history = items[index][:seq_lengths[index]]
+        # Note: repeats ok.
         item_history = item_history[-_HISTORY:]
         for i in item_history:
             item_freq[i] += 1
