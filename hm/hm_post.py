@@ -48,6 +48,7 @@ def topk_batch_opt(
 
 def process_batch(
         embeddings, seq_items_batch, seq_lengths_batch, cid_batch, predictions):
+    precisions = []
     if len(cid_batch) == _BATCH:
         topk_batch = topk_batch_opt(
             embeddings, seq_items_batch, jnp.asarray(seq_lengths_batch))
@@ -55,6 +56,7 @@ def process_batch(
         for cid, topk_list, past in zip(
                 cid_batch, topk_batch, seq_items_batch):
             precision = len(set(topk_list).intersection(set(past)))/_K
+            precisions.append(precision)
             topk = [str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     else:
@@ -63,9 +65,10 @@ def process_batch(
             topk_list = get_topk(embeddings[history], embeddings)
             topk_list = [e.item() for e in topk_list]
             precision = len(set(topk_list).intersection(set(past)))/_K
+            precisions.append(precision)
             topk = [str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
-    return precision
+    return sum(precisions)/len(precisions)
 
 
 start = time.time()
