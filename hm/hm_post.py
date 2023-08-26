@@ -54,15 +54,15 @@ def process_batch(
         topk_batch = topk_batch.tolist()
         for cid, topk_list, past in zip(
                 cid_batch, topk_batch, seq_items_batch):
+            precision = len(set(topk_list).intersection(set(past)))/_K
             topk = [str(mapping[e]) for e in topk_list]
-            precision = len(set(topk).intersection(set(past)))/_K
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     else:
         for cid, history, past in zip(
                 cid_batch, seq_items_batch, seq_items_batch):
             topk_list = get_topk(embeddings[history], embeddings)
+            precision = len(set(topk_list).intersection(set(past)))/_K
             topk = [str(mapping[e.item()]) for e in topk_list]
-            precision = len(set(topk).intersection(set(past)))/_K
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     return precision
 
