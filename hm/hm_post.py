@@ -52,14 +52,19 @@ def process_batch(
         topk_batch = topk_batch_opt(
             embeddings, seq_items_batch, jnp.asarray(seq_lengths_batch))
         topk_batch = topk_batch.tolist()
-        for cid, topk_list in zip(cid_batch, topk_batch):
+        for cid, topk_list, past in zip(
+                cid_batch, topk_batch, seq_items_batch):
             topk = [str(mapping[e]) for e in topk_list]
+            precision = len(set(topk).intersection(set(past)))/_K
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     else:
-        for cid, history in zip(cid_batch, seq_items_batch):
+        for cid, history, past in zip(
+                cid_batch, seq_items_batch, seq_items_batch):
             topk_list = get_topk(embeddings[history], embeddings)
             topk = [str(mapping[e.item()]) for e in topk_list]
+            precision = len(set(topk).intersection(set(past)))/_K
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
+    return precision
 
 
 start = time.time()
@@ -82,6 +87,7 @@ n_embeddings = embeddings.shape[0]
 pbar = tqdm(cid_map)
 pbar.set_description('KNN Search')
 item_freq = defaultdict(lambda: 0)
+avg_precision = None
 with open(_DATASET + '\\predictions.csv', 'w') as predictions:
     predictions.write('customer_id,prediction\n')
     seq_items_batch = []
@@ -97,14 +103,25 @@ with open(_DATASET + '\\predictions.csv', 'w') as predictions:
         seq_lengths_batch.append(item_history.shape[0])
         cid_batch.append(cid)
         if len(seq_items_batch) == _BATCH:
-            process_batch(embeddings, seq_items_batch,
-                          seq_lengths_batch, cid_batch, predictions)
+            precision = process_batch(
+                embeddings, seq_items_batch,
+                seq_lengths_batch, cid_batch, predictions)
+            if avg_precision is None:
+                avg_precision = precision
+            else:
+                avg_precision = 0.8*avg_precision + 0.2*precision
+            pbar.set_description(f'KNN Search precision={avg_precision}')
             seq_lengths_batch = []
             seq_items_batch = []
             cid_batch = []
     if len(cid_batch) > 0:
-        process_batch(embeddings, seq_items_batch,
-                      seq_lengths_batch, cid_batch, predictions)
+        precision = process_batch(embeddings, seq_items_batch,
+                                  seq_lengths_batch, cid_batch, predictions)
+        if avg_precision is None:
+            avg_precision = precision
+        else:
+            avg_precision = 0.8*avg_precision + 0.2*precision
+    print(f'Avg Precision = {avg_precision}')
     missing_customers = all_customers.difference(cid_map)
     global_top_k = list(item_freq.items())
     global_top_k.sort(key=lambda e: e[1], reverse=True)
