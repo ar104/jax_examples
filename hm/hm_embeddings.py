@@ -35,7 +35,7 @@ if args.start_epoch == -1:
     item_embeddings = jax.random.normal(key, shape=(n_items, _DIM))/100
 else:
     print(f'Loading embeddings from checkpoint.')
-    checkpoint = jnp.load(_DATASET + f'embeddings_{args.start_epoch}.npz')
+    checkpoint = jnp.load(_DATASET + f'/embeddings_{args.start_epoch}.npz')
     item_embeddings = checkpoint['item_embeddings']
 print(items.shape, seq_lengths.shape, item_embeddings.shape)
 
