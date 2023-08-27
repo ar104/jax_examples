@@ -6,7 +6,7 @@ from tqdm import tqdm
 import time
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
-_EMBEDDINGS = 'C:\\Users\\aroym\\OneDrive\\Documents\\GitHub\\jax_examples\\hm\\embeddings_23.npz'
+_EMBEDDINGS = _DATASET + '/embeddings_0.npz'
 _HISTORY = 64
 _K = 12
 _BATCH = 4096
@@ -117,7 +117,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
                 sum_precision += precision
             count_precision += 1
             pbar.set_description(
-                f'KNN Search precision={sum_precision/count_precision}')
+                f'KNN Search precision={sum_precision/count_precision:.4f}')
             seq_lengths_batch = []
             seq_items_batch = []
             cid_batch = []
@@ -129,7 +129,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         else:
             sum_precision += precision
         count_precision += 1
-    print(f'Avg Precision = {sum_precision/count_precision}')
+    print(f'Avg Precision = {sum_precision/count_precision:.4f}')
     missing_customers = all_customers.difference(cid_map)
     global_top_k = list(item_freq.items())
     global_top_k.sort(key=lambda e: e[1], reverse=True)

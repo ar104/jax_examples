@@ -23,8 +23,8 @@ args = parser.parse_args()
 print(jax.devices())
 start = time.time()
 data = jnp.load(_DATASET + '/tensors_history.npz')
-items = data['items']
-seq_lengths = data['seq_lengths']
+items = data['items_dedup']
+seq_lengths = data['seq_length_dedup']
 print(f'Loaded arrays from disk in {time.time() - start} secs.')
 
 n_items = int(jnp.max(items)) + 1
@@ -122,7 +122,8 @@ for epoch in range(start_epoch, 100):
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
     batches = 0
-    avg_loss = None
+    sum_loss = None
+    items_loss = 0
     seq_items_batch = []
     seq_lengths_batch = []
     for index in pbar:
@@ -150,11 +151,13 @@ for epoch in range(start_epoch, 100):
                 loss = fwd_batch_opt(
                     item_embeddings, seq_items_batch, seq_lengths_batch_array)
                 loss = (loss/seq_lengths_batch_array.shape[0])/n_items
-                if avg_loss is None:
-                    avg_loss = loss
+                if sum_loss is None:
+                    sum_loss = loss
                 else:
-                    avg_loss = 0.8*avg_loss + 0.2*loss
-                pbar.set_description(f'epoch {epoch} avg loss {avg_loss:.4f}')
+                    sum_loss += loss
+                items_loss += 1
+                pbar.set_description(
+                    f'epoch {epoch} avg loss {sum_loss/items_loss:.4f}')
             seq_items_batch = []
 
     if len(seq_items_batch) > 0:
@@ -163,11 +166,12 @@ for epoch in range(start_epoch, 100):
         loss = fwd_batch_opt(
             item_embeddings, seq_items_batch, seq_lengths_batch_array)
         loss = (loss/seq_lengths_batch_array.shape[0])/n_items
-        if avg_loss is None:
-            avg_loss = loss
+        if sum_loss is None:
+            sum_loss = loss
         else:
-            avg_loss = 0.8*avg_loss + 0.2*loss
-    print(f'Epoch = {epoch} loss = {avg_loss:.4f}')
+            sum_loss += loss
+        items_loss += 1
+    print(f'Epoch = {epoch} loss = {sum_loss/items_loss:.4f}')
 
     jnp.savez(_DATASET + f'/embeddings_{epoch}.npz',
               item_embeddings=item_embeddings)
