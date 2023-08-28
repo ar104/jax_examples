@@ -11,7 +11,7 @@ _DIM = 32
 _EPOCH_EXAMPLES = 1024000
 _BATCH = 4096
 _LR = 1e-4
-_LAMBDA = 1e-8
+_LAMBDA = 1e-4
 _EPSILON = 1e-10
 
 parser = argparse.ArgumentParser()
@@ -110,7 +110,7 @@ train_indices = jax.random.choice(key, items.shape[0], (_EPOCH_EXAMPLES,))
 if args.optimizer == 'SGD':
     opt = optax.sgd(_LR)
 elif args.optimizer == 'Adam':
-    opt = optax.adam(_LR)
+    opt = optax.adamw(_LR, weight_decay=_LAMBDA)
 else:
     print(f'Unknown optimizer {args.optimizer}')
     exit(-1)
