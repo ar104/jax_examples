@@ -46,6 +46,13 @@ def topk_batch_opt(
         input_embeddings, flat_items, flat_map, seq_lengths_batch)
 
 
+def metrics(pred, truth):
+    truth_set = set(truth)
+    hit_map = [1 if e in truth_set else 0 for e in pred]
+    precision = sum(hit_map)/len(hit_map)
+    return precision
+
+
 def process_batch(
         embeddings, seq_items_batch, seq_lengths_batch, cid_batch, predictions):
     precisions = []
@@ -55,7 +62,7 @@ def process_batch(
         topk_batch = topk_batch.tolist()
         for cid, topk_list, past in zip(
                 cid_batch, topk_batch, seq_items_batch):
-            precision = len(set(topk_list).intersection(set(past)))/_K
+            precision = metrics(topk_list, past)
             precisions.append(precision)
             topk = [str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
@@ -64,7 +71,7 @@ def process_batch(
                 cid_batch, seq_items_batch, seq_items_batch):
             topk_list = get_topk(embeddings[history], embeddings)
             topk_list = [e.item() for e in topk_list]
-            precision = len(set(topk_list).intersection(set(past)))/_K
+            precision = metrics(topk_list, past)
             precisions.append(precision)
             topk = [str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
