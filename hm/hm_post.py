@@ -74,7 +74,7 @@ def process_batch(
             precision, ap = metrics(topk_list, past)
             precisions.append(precision)
             aps.append(ap)
-            topk = [str(mapping[e]) for e in topk_list]
+            topk = ['0' + str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     else:
         for cid, history, past in zip(
@@ -84,7 +84,7 @@ def process_batch(
             precision, ap = metrics(topk_list, past)
             precisions.append(precision)
             aps.append(ap)
-            topk = [str(mapping[e]) for e in topk_list]
+            topk = ['0' + str(mapping[e]) for e in topk_list]
             predictions.write(cid + ',' + ' '.join(topk) + '\n')
     return sum(precisions)/len(precisions), sum(aps)/len(aps)
 
