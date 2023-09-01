@@ -8,10 +8,10 @@ from tqdm import tqdm
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _DIM = 32
-_EPOCH_EXAMPLES = 1024000
-_BATCH = 4096
+_EPOCH_EXAMPLES = 2048
+_BATCH = 128
 _LR = 1e-4
-_LAMBDA = 1e-4
+_LAMBDA = 1e-2
 _EPSILON = 1e-10
 
 parser = argparse.ArgumentParser()
@@ -104,8 +104,6 @@ def fwd_batch_opt(
         input_embeddings, flat_items, flat_map, seq_lengths_batch)
 
 
-train_indices = jax.random.choice(key, items.shape[0], (_EPOCH_EXAMPLES,))
-
 # Initialize optimizer.
 if args.optimizer == 'SGD':
     opt = optax.sgd(_LR)
@@ -119,6 +117,9 @@ solver_initialized = False
 
 start_epoch = max(0, args.start_epoch)
 for epoch in range(start_epoch, 100):
+    train_indices = jax.random.choice(
+        key + epoch, items.shape[0],
+        (_EPOCH_EXAMPLES,))
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
     batches = 0
