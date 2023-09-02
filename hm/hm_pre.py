@@ -52,6 +52,7 @@ for k in pbar:
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
     purchases = [item_mapping[e[0]] for e in purchases[-HISTORY:]]
+    deduped_purchases = list(set(purchases))
     # With dups
     seq_length.append(len(purchases))
     short = HISTORY - len(purchases)
@@ -59,7 +60,6 @@ for k in pbar:
         purchases.extend([-1]*short)
     training_examples_items.append(purchases)
     # Without dups
-    deduped_purchases = list(set(purchases))
     seq_length_dedup.append(len(deduped_purchases))
     short = HISTORY - len(deduped_purchases)
     if short > 0:
