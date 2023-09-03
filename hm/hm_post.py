@@ -39,8 +39,9 @@ def metrics(pred, truth):
     return precision, ap
 
 
-def process_batch(user_embeddings, item_embeddings, seq_items_batch,
-                  seq_lengths_batch, cid_batch, predictions):
+def process_batch(
+        user_embeddings, item_embeddings, seq_items_batch, cid_batch,
+        predictions):
     precisions = []
     aps = []
     topk_batch = topk_batch_opt(user_embeddings, item_embeddings)
@@ -86,23 +87,14 @@ count_precision = 0
 with open(_DATASET + '/predictions.csv', 'w') as predictions:
     predictions.write('customer_id,prediction\n')
     seq_items_batch = []
-    seq_lengths_batch = []
     cid_batch = []
     for index, cid in enumerate(pbar):
-        item_history = items[index][:seq_lengths[index]]
-        # Note: repeats ok.
-        item_history = item_history[-_HISTORY:]
-        for i in item_history:
-            item_freq[i] += 1
-        seq_items_batch.append(item_history)
-        seq_lengths_batch.append(item_history.shape[0])
-        cid_batch.append(cid)
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
-                user_embeddings[index:index + _BATCH],
+                user_embeddings[index-_BATCH:index],
                 item_embeddings,
                 seq_items_batch,
-                seq_lengths_batch, cid_batch, predictions)
+                cid_batch, predictions)
             if sum_precision is None:
                 sum_precision = precision
                 sum_ap = ap
@@ -113,14 +105,19 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             pbar.set_description(
                 f'KNN Search precision={sum_precision/count_precision:.4f} '
                 f'map = {sum_ap/count_precision:.4f}')
-            seq_lengths_batch = []
             seq_items_batch = []
             cid_batch = []
+        item_history = items[index][:seq_lengths[index]]
+        item_history = item_history[-_HISTORY:]
+        for i in item_history:
+            item_freq[i] += 1
+        seq_items_batch.append(item_history)
+        cid_batch.append(cid)
+
     if len(cid_batch) > 0:
         precision, ap = process_batch(
             user_embeddings[-len(cid_batch):],
-            item_embeddings, seq_items_batch,
-            seq_lengths_batch, cid_batch, predictions)
+            item_embeddings, seq_items_batch, cid_batch, predictions)
         if sum_precision is None:
             sum_precision = precision
             sum_ap = ap
