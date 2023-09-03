@@ -118,8 +118,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             cid_batch = []
     if len(cid_batch) > 0:
         precision, ap = process_batch(
-            user_embeddings
-            [index:index + len(cid_batch)],
+            user_embeddings[-len(cid_batch):],
             item_embeddings, seq_items_batch,
             seq_lengths_batch, cid_batch, predictions)
         if sum_precision is None:
