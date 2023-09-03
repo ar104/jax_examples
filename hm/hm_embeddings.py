@@ -90,12 +90,11 @@ else:
     exit(-1)
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
-train_indices = jax.random.choice(
-    key + 0, items.shape[0],
-    (_EPOCH_EXAMPLES,))
 start_epoch = max(0, args.start_epoch)
 for epoch in range(start_epoch, 100):
-
+    train_indices = jax.random.choice(
+        key + epoch, items.shape[0],
+        (_EPOCH_EXAMPLES,))
     train_indices = jax.random.shuffle(key + epoch + 1, train_indices)
     pbar = tqdm(train_indices)
     pbar.set_description(f'epoch {epoch}')
