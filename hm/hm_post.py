@@ -135,7 +135,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     global_top_k = list(item_freq.items())
     global_top_k.sort(key=lambda e: e[1], reverse=True)
     global_top_k = global_top_k[:_K]
-    global_top_k = [str(mapping[e[0]]) for e in global_top_k]
+    global_top_k = ['0' + str(mapping[e[0]]) for e in global_top_k]
     pbar = tqdm(missing_customers)
     pbar.set_description('Missing customers')
     for cid in pbar:
