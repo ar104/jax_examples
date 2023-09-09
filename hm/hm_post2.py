@@ -45,7 +45,7 @@ def process_batch(
     topk_batch = topk_batch.tolist()
     for cid, topk_list, past, freq in zip(
             cid_batch, topk_batch, seq_items_batch, freq_batch):
-        topk_list = [(freq[index], index) for index in topk_list]
+        topk_list = [(-freq[index], index) for index in topk_list]
         topk_list = [e[1] for e in sorted(topk_list)][:_K]
         precision, ap = metrics(topk_list, past)
         precisions.append(precision)
