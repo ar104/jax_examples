@@ -12,6 +12,9 @@ HISTORY = 256
 
 start = time.time()
 transactions = pd.read_csv(_DATASET + '/transactions_train.csv')
+df_customers = pd.read_csv(_DATASET + '/customers.csv')
+df_customers.set_index('customer_id', inplace=True)
+df_customers['age'] = df_customers['age'].fillna(df_customers['age'].mean())
 unique_items = transactions['article_id'].unique()
 df_unique = pd.DataFrame(
     {'article_id': unique_items, 'enum': list(range(len(unique_items)))})
@@ -24,7 +27,7 @@ transactions = pd.DataFrame(
     data={'customer_id': transactions['customer_id'].to_list(),
           'feature': list(zip(transactions['article_id'].to_list(),
                               transactions['t_dat'].to_list()))})
-print(f'Loaded transactions and computed mappings in '
+print(f'Loaded data and computed mappings in '
       f'{time.time() - start} seconds.')
 
 
@@ -39,6 +42,8 @@ seq_length = []
 training_examples_items_dedup = []
 seq_length_dedup = []
 training_examples_customer = []
+customer_age = []
+customer_post_code = []
 
 
 def parse_time(s):
@@ -49,6 +54,7 @@ pbar = tqdm(training_features.keys())
 pbar.set_description('Generate Samples')
 for k in pbar:
     training_examples_customer.append(k)
+    customer_age.append(df_customers.loc[k]['age'])
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
     purchases = [item_mapping[e[0]] for e in purchases[-HISTORY:]]
@@ -72,12 +78,14 @@ items = np.array(training_examples_items)
 items_dedup = np.array(training_examples_items_dedup)
 seq_lengths = np.array(seq_length)
 seq_length_dedup = np.array(seq_length_dedup)
+customer_age = np.array(customer_age)
 
 np.savez(_DATASET + '/tensors_history.npz',
          items=items,
          seq_lengths=seq_lengths,
          items_dedup=items_dedup,
-         seq_length_dedup=seq_length_dedup)
+         seq_length_dedup=seq_length_dedup,
+         customer_age=customer_age)
 training_examples_customer = pd.DataFrame(
     {'customer_id': training_examples_customer})
 training_examples_customer.to_csv(_DATASET + '/cid_map.csv', index=False)
