@@ -37,10 +37,22 @@ def metrics(pred, truth):
 
 
 def process_batch(
-    user_embeddings, item_embeddings, seq_items_batch, freq_batch,
-        cid_batch, predictions):
+        user_embeddings,
+        item_embeddings,
+        customer_age_vector,
+        seq_items_batch,
+        freq_batch,
+        cid_batch,
+        customer_age_batch,
+        predictions):
     precisions = []
     aps = []
+    customer_age_batch_array = jnp.asarray(customer_age_batch)
+    user_embeddings = (
+        user_embeddings +
+        jnp.expand_dims(customer_age_batch_array, axis=1) *
+        jnp.expand_dims(customer_age_vector, axis=0)
+    )
     topk_batch = topk_batch_opt(user_embeddings, item_embeddings)
     topk_batch = topk_batch.tolist()
     for cid, topk_list, past, freq in zip(
@@ -61,8 +73,11 @@ items_dup = data['items']
 seq_lengths_dup = data['seq_lengths']
 items = data['items_dedup']
 seq_lengths = data['seq_length_dedup']
-item_embeddings = jnp.load(_EMBEDDINGS)['item_embeddings']
-user_embeddings = jnp.load(_EMBEDDINGS)['user_embeddings']
+customer_age = data['customer_age']
+saved_state = jnp.load(_EMBEDDINGS)
+item_embeddings = saved_state['item_embeddings']
+user_embeddings = saved_state['user_embeddings']
+customer_age_vector = saved_state['customer_age_vector']
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
 cid_map = pd.read_csv(_DATASET + '/cid_map.csv')
 cid_map = cid_map['customer_id'].to_list()
@@ -86,14 +101,18 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     seq_items_batch = []
     freq_batch = []
     cid_batch = []
+    customer_age_batch = []
     for index, cid in enumerate(pbar):
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
                 user_embeddings[index-_BATCH:index],
                 item_embeddings,
+                customer_age_vector,
                 seq_items_batch,
                 freq_batch,
-                cid_batch, predictions)
+                cid_batch,
+                customer_age_batch,
+                predictions)
             if sum_precision is None:
                 sum_precision = precision
                 sum_ap = ap
@@ -107,6 +126,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             seq_items_batch = []
             freq_batch = []
             cid_batch = []
+            customer_age_batch = []
         item_history = items[index][:seq_lengths[index]]
         item_history = item_history[-_HISTORY:]
         for i in item_history:
@@ -117,6 +137,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         seq_items_batch.append(item_history)
         freq_batch.append(example_freq)
         cid_batch.append(cid)
+        customer_age_batch.append(customer_age[index])
 
     if len(cid_batch) > 0:
         precision, ap = process_batch(
