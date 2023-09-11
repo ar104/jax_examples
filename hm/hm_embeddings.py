@@ -11,7 +11,7 @@ _DIM = 32
 _EPOCH_EXAMPLES = 256000
 _BATCH = 128
 _LR = 1e-4
-_LAMBDA = 1e-2
+_LAMBDA = 5e-1
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--optimizer', type=str, default='Adam', help='SGD or Adam')
