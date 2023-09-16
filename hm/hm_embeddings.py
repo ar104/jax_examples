@@ -264,4 +264,5 @@ for epoch in range(start_epoch, 100):
         items_loss += 1
     print(f'Epoch = {epoch} loss = {sum_loss/items_loss:.4f}')
 
-    jnp.savez(_DATASET + f'/embeddings_{epoch}.npz', *model_parameters)
+    jnp.savez(
+        _DATASET + f'/embeddings_{epoch}.npz', **model_parameters._asdict())
