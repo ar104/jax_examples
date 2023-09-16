@@ -3,6 +3,7 @@ from datetime import datetime
 import pandas as pd
 import random
 import numpy as np
+from typing import Dict
 from tqdm import tqdm
 import time
 
@@ -10,27 +11,59 @@ import time
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 HISTORY = 256
 
-start = time.time()
-transactions = pd.read_csv(_DATASET + '/transactions_train.csv')
-df_customers = pd.read_csv(_DATASET + '/customers.csv')
-df_customers.set_index('customer_id', inplace=True)
-df_customers['age'] = df_customers['age'].fillna(df_customers['age'].mean())
-min_age = df_customers['age'].min()
-max_age = df_customers['age'].max()
-df_customers['age'] = (df_customers['age'] - min_age)/(max_age - min_age)
-unique_items = transactions['article_id'].unique()
-df_unique = pd.DataFrame(
-    {'article_id': unique_items, 'enum': list(range(len(unique_items)))})
-df_unique.to_csv(_DATASET + '/item_map.csv', index=False)
-df_unique.set_index('article_id', inplace=True)
-item_mapping = df_unique['enum'].to_dict()
-del df_unique
 
+def encode_categorical(df, col_name):
+    vocab = df[col_name].unique()
+    mapping = dict([(v, i) for i, v in enumerate(vocab)])
+    df[col_name] = df[col_name].apply(lambda val: mapping[val])
+    print(f'Encoded {len(mapping)} categories for column {col_name}')
+    return mapping
+
+
+def encode_numerical(df, col_name):
+    col_min = df[col_name].min()
+    col_max = df[col_name].max()
+    col_mean = df[col_name].mean()
+    df[col_name] = (
+        df[col_name].fillna(col_mean) - col_min)/(col_max - col_min)
+    print(f'Encoded column {col_name} between '
+          f'minimum {col_min} and maximum {col_max}')
+
+
+def encode_customer_features(df_customers):
+    encode_numerical(df_customers, 'age')
+
+
+def encode_article_features(df_articles):
+    encode_categorical(df_articles, 'colour_group_name')
+    encode_categorical(df_articles, 'section_name')
+    encode_categorical(df_articles, 'garment_group_name')
+    # enum to map transaction set to articles.
+    df_articles['enum'] = list(range(df_articles.shape[0]))
+
+
+start = time.time()
+df_customers = pd.read_csv(_DATASET + '/customers.csv')[
+    ['customer_id', 'age']]
+df_articles = pd.read_csv(_DATASET + '/articles.csv')[
+    ['article_id', 'colour_group_name', 'section_name', 'garment_group_name']]
+
+encode_article_features(df_articles)
+encode_customer_features(df_customers)
+
+# Save mapping of articles for prediction step.
+df_articles[['article_id', 'enum']].to_csv(_DATASET + '/item_map.csv')
+# Setup indices for retrieval.
+df_customers.set_index('customer_id', inplace=True)
+df_articles.set_index('article_id', inplace=True)
+
+# Read transaction data.
+transactions = pd.read_csv(_DATASET + '/transactions_train.csv')
 transactions = pd.DataFrame(
     data={'customer_id': transactions['customer_id'].to_list(),
           'feature': list(zip(transactions['article_id'].to_list(),
                               transactions['t_dat'].to_list()))})
-print(f'Loaded data and computed mappings in '
+print(f'Loaded data and encoded entity features in '
       f'{time.time() - start} seconds.')
 
 
@@ -46,7 +79,6 @@ training_examples_items_dedup = []
 seq_length_dedup = []
 training_examples_customer = []
 customer_age = []
-customer_post_code = []
 
 
 def parse_time(s):
@@ -60,7 +92,7 @@ for k in pbar:
     customer_age.append(df_customers.loc[k]['age'])
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
-    purchases = [item_mapping[e[0]] for e in purchases[-HISTORY:]]
+    purchases = [df_articles['enum'].loc[e[0]] for e in purchases[-HISTORY:]]
     deduped_purchases = list(set(purchases))
     # With dups
     seq_length.append(len(purchases))
@@ -82,13 +114,19 @@ items_dedup = np.array(training_examples_items_dedup)
 seq_lengths = np.array(seq_length)
 seq_length_dedup = np.array(seq_length_dedup)
 customer_age = np.array(customer_age)
+articles_colour_group_name = np.array(df_articles['colour_group_name'])
+articles_section_name = np.array(df_articles['section_name'])
+articles_garment_group_name = np.array(df_articles['garment_group_name'])
 
 np.savez(_DATASET + '/tensors_history.npz',
          items=items,
          seq_lengths=seq_lengths,
          items_dedup=items_dedup,
          seq_length_dedup=seq_length_dedup,
-         customer_age=customer_age)
+         customer_age=customer_age,
+         articles_color_group_name=articles_colour_group_name,
+         articles_section_name=articles_section_name,
+         articles_garment_group_name=articles_garment_group_name)
 training_examples_customer = pd.DataFrame(
     {'customer_id': training_examples_customer})
 training_examples_customer.to_csv(_DATASET + '/cid_map.csv', index=False)

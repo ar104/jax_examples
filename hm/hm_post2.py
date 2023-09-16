@@ -74,8 +74,21 @@ seq_lengths_dup = data['seq_lengths']
 items = data['items_dedup']
 seq_lengths = data['seq_length_dedup']
 customer_age = data['customer_age']
+articles_color_group = data['articles_color_group_name']
+articles_section_name = data['articles_section_name']
+articles_garment_group = data['articles_garment_group_name']
 saved_state = jnp.load(_EMBEDDINGS)
+# Load and adjust item embeddings.
 item_embeddings = saved_state['item_embeddings']
+color_group_embeddings = saved_state['color_group_embeddings']
+section_name_embeddings = saved_state['section_name_embeddings']
+garment_group_embeddings = saved_state['garment_group_embeddings']
+item_embeddings = (
+    item_embeddings +
+    color_group_embeddings[articles_color_group] +
+    section_name_embeddings[articles_section_name] +
+    garment_group_embeddings[articles_garment_group]
+)
 user_embeddings = saved_state['user_embeddings']
 customer_age_vector = saved_state['customer_age_vector']
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
