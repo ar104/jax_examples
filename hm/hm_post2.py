@@ -90,7 +90,7 @@ item_embeddings = (
     garment_group_embeddings[articles_garment_group]
 )
 user_embeddings = saved_state['user_embeddings']
-customer_age_vector = saved_state['customer_age_vector']
+customer_age_vector = saved_state['user_age_vector']
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
 cid_map = pd.read_csv(_DATASET + '/cid_map.csv')
 cid_map = cid_map['customer_id'].to_list()
