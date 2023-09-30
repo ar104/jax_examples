@@ -1,0 +1,82 @@
+from typing import NamedTuple
+import jax
+import jax.numpy as jnp
+
+
+_DIM = 32
+_ITEM_NET_HIDDEN_DIM = 32
+
+
+class HMModel(NamedTuple):
+    '''Holds all trainable weights.'''
+    user_embeddings: jnp.ndarray
+    user_age_vector: jnp.ndarray
+    item_embeddings: jnp.ndarray
+    color_group_embeddings: jnp.ndarray
+    section_name_embeddings: jnp.ndarray
+    garment_group_embeddings: jnp.ndarray
+    item_net_input_layer: jnp.ndarray
+    item_net_hidden_layer: jnp.ndarray
+    item_net_output_layer: jnp.ndarray
+
+    @classmethod
+    def factory(cls,
+                rng_key,
+                n_users,
+                n_articles,
+                n_color_groups,
+                n_section_names,
+                n_garment_groups):
+        '''Constructs and returns initialized model parameters'''
+        return HMModel(
+            user_embeddings=jax.random.normal(
+                rng_key, shape=(n_users, _DIM)) / 1000,
+            user_age_vector=jax.random.normal(rng_key + 1, shape=(_DIM,)) / 100,
+            item_embeddings=jax.random.normal(
+                rng_key + 2, shape=(n_articles, _DIM)) / 1000,
+            color_group_embeddings=jax.random.normal(
+                rng_key + 3, shape=(n_color_groups, _DIM)) / 100,
+            section_name_embeddings=jax.random.normal(
+                rng_key + 4, shape=(n_section_names, _DIM)) / 100,
+            garment_group_embeddings=jax.random.normal(
+                rng_key + 4, shape=(n_garment_groups, _DIM)) / 100,
+            item_net_input_layer=jax.random.normal(
+                rng_key + 5, shape=(_ITEM_NET_HIDDEN_DIM, _DIM))/_DIM,
+            item_net_hidden_layer=jax.random.normal(
+                rng_key + 6,
+                shape=(_ITEM_NET_HIDDEN_DIM, _ITEM_NET_HIDDEN_DIM))/_ITEM_NET_HIDDEN_DIM,
+            item_net_output_layer=jax.random.normal(
+                rng_key + 7,
+                shape=(_DIM, _ITEM_NET_HIDDEN_DIM))/_ITEM_NET_HIDDEN_DIM,
+        )
+
+    def user_embedding_vectors(self,
+                               batch_user_indices,
+                               batch_user_ages):
+        '''Computes the user embedding vectors.'''
+        features = (self.user_embeddings[batch_user_indices] +
+                    jnp.expand_dims(batch_user_ages, axis=1) *
+                    jnp.expand_dims(self.user_age_vector, axis=0))
+        return features
+
+    def item_embedding_vectors(self,
+                               batch_articles_color_group,
+                               batch_articles_section_name,
+                               batch_articles_garment_group):
+        '''Computes the item embedding vectors.'''
+        features = (self.color_group_embeddings[batch_articles_color_group] +
+                    self.section_name_embeddings[batch_articles_section_name] +
+                    self.garment_group_embeddings[batch_articles_garment_group]
+                    )
+        transformed_features = jnp.einsum(
+            'bf,hf->bh', features, self.item_net_input_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,ij->bj', transformed_features, self.item_net_hidden_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,io->bo', transformed_features, self.item_net_output_layer)
+        return (
+            self.item_embeddings +
+            transformed_features
+        )
