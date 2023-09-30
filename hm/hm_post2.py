@@ -136,7 +136,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         customer_age_batch.append(customer_age[index])
 
     if len(cid_batch) > 0:
-        precision, ap = process_batch(hm_model.user_embeddings(
+        precision, ap = process_batch(hm_model.user_embedding_vectors(
             jnp.arange(
                 total_users - len(cid_batch),
                 total_users),
