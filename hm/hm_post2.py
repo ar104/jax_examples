@@ -102,8 +102,9 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     for index, cid in enumerate(pbar):
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
-                hm_model.user_embeddings(jnp.arange(index-_BATCH, index),
-                                         customer_age_batch),
+                hm_model.user_embedding_vectors(
+                    jnp.arange(index-_BATCH, index),
+                    customer_age_batch),
                 item_embeddings,
                 seq_items_batch,
                 freq_batch,
