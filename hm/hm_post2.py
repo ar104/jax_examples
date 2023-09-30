@@ -104,7 +104,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             precision, ap = process_batch(
                 hm_model.user_embedding_vectors(
                     jnp.arange(index-_BATCH, index),
-                    customer_age_batch),
+                    jnp.asarray(customer_age_batch)),
                 item_embeddings,
                 seq_items_batch,
                 freq_batch,
