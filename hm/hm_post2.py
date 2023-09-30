@@ -43,7 +43,6 @@ def process_batch(
         seq_items_batch,
         freq_batch,
         cid_batch,
-        customer_age_batch,
         predictions):
     precisions = []
     aps = []
@@ -143,8 +142,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
                 total_users),
             customer_age_batch),
             item_embeddings,
-            seq_items_batch, freq_batch, cid_batch,
-            customer_age_batch, predictions)
+            seq_items_batch, freq_batch, cid_batch, predictions)
         if sum_precision is None:
             sum_precision = precision
             sum_ap = ap
