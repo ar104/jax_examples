@@ -1,6 +1,7 @@
 import argparse
 from collections import defaultdict
 import pandas as pd
+from hm_model import HMModel
 import jax
 import jax.numpy as jnp
 from tqdm import tqdm
@@ -39,7 +40,6 @@ def metrics(pred, truth):
 def process_batch(
         user_embeddings,
         item_embeddings,
-        customer_age_vector,
         seq_items_batch,
         freq_batch,
         cid_batch,
@@ -47,12 +47,6 @@ def process_batch(
         predictions):
     precisions = []
     aps = []
-    customer_age_batch_array = jnp.asarray(customer_age_batch)
-    user_embeddings = (
-        user_embeddings +
-        jnp.expand_dims(customer_age_batch_array, axis=1) *
-        jnp.expand_dims(customer_age_vector, axis=0)
-    )
     topk_batch = topk_batch_opt(user_embeddings, item_embeddings)
     topk_batch = topk_batch.tolist()
     for cid, topk_list, past, freq in zip(
@@ -79,18 +73,10 @@ articles_section_name = data['articles_section_name']
 articles_garment_group = data['articles_garment_group_name']
 saved_state = jnp.load(_EMBEDDINGS)
 # Load and adjust item embeddings.
-item_embeddings = saved_state['item_embeddings']
-color_group_embeddings = saved_state['color_group_embeddings']
-section_name_embeddings = saved_state['section_name_embeddings']
-garment_group_embeddings = saved_state['garment_group_embeddings']
-item_embeddings = (
-    item_embeddings +
-    color_group_embeddings[articles_color_group] +
-    section_name_embeddings[articles_section_name] +
-    garment_group_embeddings[articles_garment_group]
-)
-user_embeddings = saved_state['user_embeddings']
-customer_age_vector = saved_state['user_age_vector']
+hm_model = HMModel(**saved_state)
+total_users = hm_model.user_embeddings.shape[0]
+item_embeddings = hm_model.item_embedding_vectors(
+    articles_color_group, articles_section_name, articles_garment_group)
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
 cid_map = pd.read_csv(_DATASET + '/cid_map.csv')
 cid_map = cid_map['customer_id'].to_list()
@@ -99,8 +85,6 @@ all_customers = set(pd.read_csv(
 print(f'Loaded from disk in {time.time() - start} secs.')
 mapping.set_index('enum', inplace=True)
 mapping = mapping['article_id'].to_dict()
-print(user_embeddings.shape)
-print(item_embeddings.shape)
 print(items.shape)
 print(len(mapping.keys()))
 pbar = tqdm(cid_map)
@@ -118,13 +102,12 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     for index, cid in enumerate(pbar):
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
-                user_embeddings[index-_BATCH:index],
+                hm_model.user_embeddings(jnp.arange(index-_BATCH, index),
+                                         customer_age_batch),
                 item_embeddings,
-                customer_age_vector,
                 seq_items_batch,
                 freq_batch,
                 cid_batch,
-                customer_age_batch,
                 predictions)
             if sum_precision is None:
                 sum_precision = precision
@@ -153,15 +136,14 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         customer_age_batch.append(customer_age[index])
 
     if len(cid_batch) > 0:
-        precision, ap = process_batch(
-            user_embeddings[-len(cid_batch):],
+        precision, ap = process_batch(hm_model.user_embeddings(
+            jnp.arange(
+                total_users - len(cid_batch),
+                total_users),
+            customer_age_batch),
             item_embeddings,
-            customer_age_vector,
-            seq_items_batch,
-            freq_batch,
-            cid_batch,
-            customer_age_batch,
-            predictions)
+            seq_items_batch, freq_batch, cid_batch,
+            customer_age_batch, predictions)
         if sum_precision is None:
             sum_precision = precision
             sum_ap = ap

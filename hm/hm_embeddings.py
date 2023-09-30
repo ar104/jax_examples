@@ -56,7 +56,7 @@ if args.start_epoch == -1:
 else:
     print(f'Loading embeddings from checkpoint.')
     checkpoint = jnp.load(_DATASET + f'/embeddings_{args.start_epoch}.npz')
-    model_parameters = ModelParameters(**checkpoint)
+    model_parameters = HMModel(**checkpoint)
 
 for name, value in model_parameters._asdict().items():
     print(f'{name} {value.shape}')
