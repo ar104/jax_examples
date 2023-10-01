@@ -79,9 +79,9 @@ def fwd_batch_opt_core(model_params,
         user_indices_batch, customer_ages_batch)
     # Modify item embeddings by input features.
     input_item_embeddings = model_params.item_embedding_vectors(
-        batch_articles_color_group=articles_color_group,
-        batch_articles_section_name=articles_section_name,
-        batch_articles_garment_group=articles_garment_group
+        articles_color_group=articles_color_group,
+        articles_section_name=articles_section_name,
+        articles_garment_group=articles_garment_group
     )
     # Note: negation in next line is reversed for positive examples
     # in the following line to it.

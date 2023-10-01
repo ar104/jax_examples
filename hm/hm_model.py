@@ -60,13 +60,13 @@ class HMModel(NamedTuple):
         return features
 
     def item_embedding_vectors(self,
-                               batch_articles_color_group,
-                               batch_articles_section_name,
-                               batch_articles_garment_group):
+                               articles_color_group,
+                               articles_section_name,
+                               articles_garment_group):
         '''Computes the item embedding vectors.'''
-        features = (self.color_group_embeddings[batch_articles_color_group] +
-                    self.section_name_embeddings[batch_articles_section_name] +
-                    self.garment_group_embeddings[batch_articles_garment_group]
+        features = (self.color_group_embeddings[articles_color_group] +
+                    self.section_name_embeddings[articles_section_name] +
+                    self.garment_group_embeddings[articles_garment_group]
                     )
         transformed_features = jnp.einsum(
             'bf,hf->bh', features, self.item_net_input_layer)
