@@ -140,7 +140,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             jnp.arange(
                 total_users - len(cid_batch),
                 total_users),
-            customer_age_batch),
+            jnp.asarray(customer_age_batch)),
             item_embeddings,
             seq_items_batch, freq_batch, cid_batch, predictions)
         if sum_precision is None:
