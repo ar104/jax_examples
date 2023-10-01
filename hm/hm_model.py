@@ -5,12 +5,16 @@ import jax.numpy as jnp
 
 _DIM = 32
 _ITEM_NET_HIDDEN_DIM = 32
+_USER_NET_HIDDEN_DIM = 32
 
 
 class HMModel(NamedTuple):
     '''Holds all trainable weights.'''
     user_embeddings: jnp.ndarray
     user_age_vector: jnp.ndarray
+    user_net_input_layer: jnp.ndarray
+    user_net_hidden_layer: jnp.ndarray
+    user_net_output_layer: jnp.ndarray
     item_embeddings: jnp.ndarray
     color_group_embeddings: jnp.ndarray
     section_name_embeddings: jnp.ndarray
@@ -48,16 +52,34 @@ class HMModel(NamedTuple):
             item_net_output_layer=jax.random.normal(
                 rng_key + 7,
                 shape=(_DIM, _ITEM_NET_HIDDEN_DIM))/_ITEM_NET_HIDDEN_DIM,
+            user_net_input_layer=jax.random.normal(
+                rng_key + 8, shape=(_USER_NET_HIDDEN_DIM, _DIM))/_DIM,
+            user_net_hidden_layer=jax.random.normal(
+                rng_key + 9,
+                shape=(_USER_NET_HIDDEN_DIM, _USER_NET_HIDDEN_DIM))/_USER_NET_HIDDEN_DIM,
+            user_net_output_layer=jax.random.normal(
+                rng_key + 10,
+                shape=(_DIM, _USER_NET_HIDDEN_DIM))/_USER_NET_HIDDEN_DIM,
         )
 
     def user_embedding_vectors(self,
                                batch_user_indices,
                                batch_user_ages):
         '''Computes the user embedding vectors.'''
-        features = (self.user_embeddings[batch_user_indices] +
-                    jnp.expand_dims(batch_user_ages, axis=1) *
-                    jnp.expand_dims(self.user_age_vector, axis=0))
-        return features
+        features = (
+            jnp.expand_dims(batch_user_ages, axis=1) *
+            jnp.expand_dims(self.user_age_vector, axis=0)
+        )
+        transformed_features = jnp.einsum(
+            'bf,hf->bh', features, self.user_net_input_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,ij->bj', transformed_features, self.user_net_hidden_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,io->bo', transformed_features, self.user_net_output_layer)
+        return (
+            self.user_embeddings[batch_user_indices] + transformed_features)
 
     def item_embedding_vectors(self,
                                articles_color_group,
@@ -76,7 +98,4 @@ class HMModel(NamedTuple):
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
             'bi,io->bo', transformed_features, self.item_net_output_layer)
-        return (
-            self.item_embeddings +
-            transformed_features
-        )
+        return (self.item_embeddings + transformed_features)

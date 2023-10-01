@@ -10,7 +10,7 @@ from hm_model import HMModel
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
-_EPOCH_EXAMPLES = 256000
+_EPOCH_EXAMPLES = 2560
 _BATCH = 128
 _LR = 1e-4
 _LAMBDA = 5e-1

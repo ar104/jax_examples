@@ -8,7 +8,7 @@ from tqdm import tqdm
 import time
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
-_EMBEDDINGS = _DATASET + '/embeddings_test.npz'
+_EMBEDDINGS = _DATASET + '/embeddings_0.npz'
 _HISTORY = 64
 _RETRIEVE_K = 200
 _K = 12
