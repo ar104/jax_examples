@@ -1,3 +1,4 @@
+from functools import partial
 import argparse
 import jax
 import jax.numpy as jnp
@@ -10,7 +11,7 @@ from hm_model import HMModel
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
-_EPOCH_EXAMPLES = 2560
+_EPOCH_EXAMPLES = 256000
 _BATCH = 128
 _LR = 1e-4
 _LAMBDA = 5e-1
@@ -65,31 +66,40 @@ for name, value in model_parameters._asdict().items():
 ##########################################################
 
 
-@jax.jit
+@partial(jax.jit, static_argnames=['batch_size'])
 def fwd_batch_opt_core(model_params,
                        articles_color_group,
                        articles_section_name,
                        articles_garment_group,
-                       user_indices_batch,
                        customer_ages_batch,
                        flat_items,
-                       flat_map):
-    # Modify user embeddings by input features.
-    input_user_embeddings = model_params.user_embedding_vectors(
-        user_indices_batch, customer_ages_batch)
+                       flat_items_map,
+                       flat_labels,
+                       batch_size):
     # Modify item embeddings by input features.
     input_item_embeddings = model_params.item_embedding_vectors(
         articles_color_group=articles_color_group,
         articles_section_name=articles_section_name,
         articles_garment_group=articles_garment_group
     )
+    # Modify user embeddings by input features and history.
+    user_history_vectors = jax.ops.segment_sum(
+        input_item_embeddings[flat_items, :],
+        flat_items_map,
+        num_segments=batch_size
+    )
+    input_user_embeddings = model_params.user_embedding_vectors(
+        user_history_vectors, customer_ages_batch)
     # Note: negation in next line is reversed for positive examples
     # in the following line to it.
     logits = -jnp.einsum('ij,kj->ki', input_item_embeddings,
                          input_user_embeddings)
-    logits = logits.at[flat_map, flat_items].multiply(-1.0)
-    nll = jnp.sum(-jnp.log(jax.nn.sigmoid(logits)), axis=-1)
-    loss = jnp.sum(nll, axis=0)
+    # Compute the softmax cross entropy loss.
+    log_numerator = jnp.take_along_axis(
+        logits, jnp.expand_dims(flat_labels, axis=1), axis=1)
+    log_denominator = jax.nn.logsumexp(logits, axis=1)
+    # negative log likelihood
+    loss = jnp.sum(log_denominator - jnp.squeeze(log_numerator, axis=1))
     return loss
 
 
@@ -99,24 +109,27 @@ def fwd_batch_opt(params: HMModel,
                   articles_color_group,
                   articles_section_name,
                   articles_garment_group,
-                  seq_items_batch,
-                  seq_lengths_batch: jnp.ndarray,
-                  user_indices_batch: jnp.ndarray):
-    batch_size = len(seq_items_batch)
+                  seq_labels_batch: jnp.ndarray,
+                  seq_history_batch,
+                  seq_lengths_batch: jnp.ndarray):
+    batch_size = len(seq_history_batch)
     # Flatten items from all examples into a single vector.
-    flat_items = jnp.concatenate(seq_items_batch, axis=0)
-    # Map back to example.
-    flat_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
+    flat_items = jnp.concatenate(seq_history_batch, axis=0)
+    flat_items_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
     return fwd_batch_opt_core(params,
                               # Item features.
                               articles_color_group,
                               articles_section_name,
                               articles_garment_group,
                               # User features.
-                              user_indices_batch,
                               customer_ages_batch,
                               # Transactions.
-                              flat_items, flat_map)
+                              flat_items,
+                              flat_items_map,
+                              # Labels
+                              seq_labels_batch,
+                              # batch size - dynamic jit
+                              customer_ages_batch.shape[0])
 
 
 # Initialize optimizer.
@@ -140,23 +153,33 @@ for epoch in range(start_epoch, 100):
     batches = 0
     sum_loss = None
     items_loss = 0
-    seq_items_batch = []
+    seq_labels_batch = []
+    seq_history_batch = []
     seq_lengths_batch = []
     user_indices_batch = []
     customer_ages_batch = []
+    label_indices = jax.random.randint(
+        key=key + epoch + 1,
+        shape=(train_indices.shape[0],),
+        minval=0,
+        maxval=seq_lengths[train_indices])
     for index in pbar:
-        seq_items = items[index][:seq_lengths[index]]
-        seq_items_batch.append(seq_items)
-        seq_lengths_batch.append(seq_lengths[index])
+        seq_history = items[index][:label_indices[index]]
+        seq_label = items[index][label_indices[index]]
+        seq_labels_batch.append(seq_label)
+        seq_history_batch.append(seq_history)
+        seq_lengths_batch.append(label_indices[index])
         user_indices_batch.append(index)
         customer_ages_batch.append(customer_age[index])
-        if len(seq_items_batch) == _BATCH:
+        if len(seq_history_batch) == _BATCH:
             seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
             user_indices_batch_array = jnp.asarray(user_indices_batch)
             customer_ages_batch_array = jnp.asarray(customer_ages_batch)
+            seq_labels_batch_array = jnp.asarray(seq_labels_batch)
             seq_lengths_batch = []
             user_indices_batch = []
             customer_ages_batch = []
+            seq_labels_batch = []
             if solver_initialized:
                 model_parameters, state = solver.update(
                     params=model_parameters,
@@ -165,9 +188,9 @@ for epoch in range(start_epoch, 100):
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
-                    seq_items_batch=seq_items_batch,
-                    seq_lengths_batch=seq_lengths_batch_array,
-                    user_indices_batch=user_indices_batch_array)
+                    seq_labels_batch=seq_labels_batch_array,
+                    seq_history_batch=seq_history_batch,
+                    seq_lengths_batch=seq_lengths_batch_array)
             else:
                 state = solver.init_state(
                     init_params=model_parameters,
@@ -175,9 +198,9 @@ for epoch in range(start_epoch, 100):
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
-                    seq_items_batch=seq_items_batch,
-                    seq_lengths_batch=seq_lengths_batch_array,
-                    user_indices_batch=user_indices_batch_array)
+                    seq_labels_batch=seq_labels_batch_array,
+                    seq_history_batch=seq_history_batch,
+                    seq_lengths_batch=seq_lengths_batch_array)
                 solver_initialized = True
             batches += 1
             # Update displayed loss.
@@ -188,9 +211,10 @@ for epoch in range(start_epoch, 100):
                     articles_color_group,
                     articles_section_name,
                     articles_garment_group,
-                    seq_items_batch, seq_lengths_batch_array,
-                    user_indices_batch_array)
-                loss = (loss/seq_lengths_batch_array.shape[0])/n_articles
+                    seq_labels_batch_array,
+                    seq_history_batch,
+                    seq_lengths_batch_array)
+                loss = (loss/seq_lengths_batch_array.shape[0])
                 if sum_loss is None:
                     sum_loss = loss
                 else:
@@ -198,22 +222,24 @@ for epoch in range(start_epoch, 100):
                 items_loss += 1
                 pbar.set_description(
                     f'epoch {epoch} avg loss {sum_loss/items_loss:.4f}')
-            seq_items_batch = []
+            seq_history_batch = []
 
-    if len(seq_items_batch) > 0:
+    if len(seq_labels_batch) > 0:
         # Use partial batch to compute loss metric only.
         seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
         user_indices_batch_array = jnp.asarray(user_indices_batch)
         customer_ages_batch_array = jnp.asarray(customer_ages_batch)
+        seq_labels_batch_array = jnp.asarray(seq_labels_batch)
         loss = fwd_batch_opt(
             model_parameters,
             customer_ages_batch_array,
             articles_color_group,
             articles_section_name,
             articles_garment_group,
-            seq_items_batch,
-            seq_lengths_batch_array, user_indices_batch_array)
-        loss = (loss/seq_lengths_batch_array.shape[0])/n_articles
+            seq_labels_batch_array,
+            seq_history_batch,
+            seq_lengths_batch_array)
+        loss = (loss/seq_lengths_batch_array.shape[0])
         if sum_loss is None:
             sum_loss = loss
         else:

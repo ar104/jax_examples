@@ -10,7 +10,6 @@ _USER_NET_HIDDEN_DIM = 32
 
 class HMModel(NamedTuple):
     '''Holds all trainable weights.'''
-    user_embeddings: jnp.ndarray
     user_age_vector: jnp.ndarray
     user_net_input_layer: jnp.ndarray
     user_net_hidden_layer: jnp.ndarray
@@ -33,8 +32,6 @@ class HMModel(NamedTuple):
                 n_garment_groups):
         '''Constructs and returns initialized model parameters'''
         return HMModel(
-            user_embeddings=jax.random.normal(
-                rng_key, shape=(n_users, _DIM)) / 1000,
             user_age_vector=jax.random.normal(rng_key + 1, shape=(_DIM,)) / 100,
             item_embeddings=jax.random.normal(
                 rng_key + 2, shape=(n_articles, _DIM)) / 1000,
@@ -63,13 +60,13 @@ class HMModel(NamedTuple):
         )
 
     def user_embedding_vectors(self,
-                               batch_user_indices,
+                               batch_user_history_vectors,
                                batch_user_ages):
         '''Computes the user embedding vectors.'''
         features = (
             jnp.expand_dims(batch_user_ages, axis=1) *
             jnp.expand_dims(self.user_age_vector, axis=0)
-        )
+        ) + batch_user_history_vectors
         transformed_features = jnp.einsum(
             'bf,hf->bh', features, self.user_net_input_layer)
         transformed_features = jax.nn.relu(transformed_features)
@@ -78,8 +75,7 @@ class HMModel(NamedTuple):
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
             'bi,io->bo', transformed_features, self.user_net_output_layer)
-        return (
-            self.user_embeddings[batch_user_indices] + transformed_features)
+        return transformed_features
 
     def item_embedding_vectors(self,
                                articles_color_group,
