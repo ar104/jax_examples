@@ -73,7 +73,6 @@ articles_garment_group = data['articles_garment_group_name']
 saved_state = jnp.load(_EMBEDDINGS)
 # Load and adjust item embeddings.
 hm_model = HMModel(**saved_state)
-total_users = hm_model.user_embeddings.shape[0]
 item_embeddings = hm_model.item_embedding_vectors(
     articles_color_group, articles_section_name, articles_garment_group)
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
@@ -98,11 +97,12 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     freq_batch = []
     cid_batch = []
     customer_age_batch = []
+    customer_history_vector_batch = []
     for index, cid in enumerate(pbar):
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
                 hm_model.user_embedding_vectors(
-                    jnp.arange(index-_BATCH, index),
+                    jnp.stack(customer_history_vector_batch),
                     jnp.asarray(customer_age_batch)),
                 item_embeddings,
                 seq_items_batch,
@@ -123,6 +123,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             freq_batch = []
             cid_batch = []
             customer_age_batch = []
+            customer_history_vector_batch = []
         item_history = items[index][:seq_lengths[index]]
         item_history = item_history[-_HISTORY:]
         for i in item_history:
@@ -131,15 +132,15 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         for i in items_dup[index][:seq_lengths_dup[index]]:
             example_freq[i] += 1
         seq_items_batch.append(item_history)
+        customer_history_vector_batch.append(
+            jnp.sum(item_embeddings[item_history, :], axis=0))
         freq_batch.append(example_freq)
         cid_batch.append(cid)
         customer_age_batch.append(customer_age[index])
 
     if len(cid_batch) > 0:
         precision, ap = process_batch(hm_model.user_embedding_vectors(
-            jnp.arange(
-                total_users - len(cid_batch),
-                total_users),
+            jnp.stack(customer_history_vector_batch),
             jnp.asarray(customer_age_batch)),
             item_embeddings,
             seq_items_batch, freq_batch, cid_batch, predictions)
