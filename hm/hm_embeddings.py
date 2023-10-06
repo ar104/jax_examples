@@ -74,6 +74,7 @@ def fwd_batch_opt_core(model_params,
                        customer_ages_batch,
                        flat_items,
                        flat_items_map,
+                       seq_lengths_batch,
                        flat_labels,
                        batch_size):
     # Modify item embeddings by input features.
@@ -87,7 +88,7 @@ def fwd_batch_opt_core(model_params,
         input_item_embeddings[flat_items, :],
         flat_items_map,
         num_segments=batch_size
-    )
+    ) / jnp.expand_dims(seq_lengths_batch, axis=1)
     input_user_embeddings = model_params.user_embedding_vectors(
         user_history_vectors, customer_ages_batch)
     # Note: negation in next line is reversed for positive examples
@@ -126,6 +127,7 @@ def fwd_batch_opt(params: HMModel,
                               # Transactions.
                               flat_items,
                               flat_items_map,
+                              seq_lengths_batch,
                               # Labels
                               seq_labels_batch,
                               # batch size - dynamic jit

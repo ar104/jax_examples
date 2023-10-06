@@ -133,7 +133,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             example_freq[i] += 1
         seq_items_batch.append(item_history)
         customer_history_vector_batch.append(
-            jnp.sum(item_embeddings[item_history, :], axis=0))
+            jnp.mean(item_embeddings[item_history, :], axis=0))
         freq_batch.append(example_freq)
         cid_batch.append(cid)
         customer_age_batch.append(customer_age[index])
