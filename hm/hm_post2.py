@@ -64,8 +64,9 @@ start = time.time()
 data = jnp.load(_DATASET + '/tensors_history.npz')
 items_dup = data['items']
 seq_lengths_dup = data['seq_lengths']
-items = data['items_dedup']
-seq_lengths = data['seq_length_dedup']
+# Use duplicate items in history.
+items = data['items']
+seq_lengths = data['seq_length']
 customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
 articles_section_name = data['articles_section_name']

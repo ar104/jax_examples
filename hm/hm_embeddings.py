@@ -15,6 +15,7 @@ _EPOCH_EXAMPLES = 256000
 _BATCH = 128
 _LR = 1e-4
 _LAMBDA = 5e-1
+_EPSILON = 1e-6
 
 
 parser = argparse.ArgumentParser()
@@ -28,8 +29,8 @@ print(jax.devices())
 
 start = time.time()
 data = jnp.load(_DATASET + '/tensors_history.npz')
-items = data['items_dedup']
-seq_lengths = data['seq_length_dedup']
+items = data['items']
+seq_lengths = data['seq_lengths']
 customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
 articles_section_name = data['articles_section_name']
@@ -88,7 +89,7 @@ def fwd_batch_opt_core(model_params,
         input_item_embeddings[flat_items, :],
         flat_items_map,
         num_segments=batch_size
-    ) / jnp.expand_dims(seq_lengths_batch, axis=1)
+    ) / (jnp.expand_dims(seq_lengths_batch, axis=1) + _EPSILON)
     input_user_embeddings = model_params.user_embedding_vectors(
         user_history_vectors, customer_ages_batch)
     # Note: negation in next line is reversed for positive examples
