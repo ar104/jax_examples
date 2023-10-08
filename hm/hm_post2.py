@@ -66,7 +66,7 @@ items_dup = data['items']
 seq_lengths_dup = data['seq_lengths']
 # Use duplicate items in history.
 items = data['items']
-seq_lengths = data['seq_length']
+seq_lengths = data['seq_lengths']
 customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
 articles_section_name = data['articles_section_name']
