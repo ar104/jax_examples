@@ -6,6 +6,7 @@ import jax.numpy as jnp
 _DIM = 32
 _ITEM_NET_HIDDEN_DIM = 32
 _USER_NET_HIDDEN_DIM = 32
+_HISTORY_NET_HIDDEN_DIM = 32
 
 
 class HMModel(NamedTuple):
@@ -21,6 +22,9 @@ class HMModel(NamedTuple):
     item_net_input_layer: jnp.ndarray
     item_net_hidden_layer: jnp.ndarray
     item_net_output_layer: jnp.ndarray
+    history_net_input_layer: jnp.ndarray
+    history_net_hidden_layer: jnp.ndarray
+    history_net_output_layer: jnp.ndarray
 
     @classmethod
     def factory(cls,
@@ -57,7 +61,28 @@ class HMModel(NamedTuple):
             user_net_output_layer=jax.random.normal(
                 rng_key + 10,
                 shape=(_DIM, _USER_NET_HIDDEN_DIM))/_USER_NET_HIDDEN_DIM,
+            history_net_input_layer=jax.random.normal(
+                rng_key + 11, shape=(_HISTORY_NET_HIDDEN_DIM, _DIM))/_DIM,
+            history_net_hidden_layer=jax.random.normal(
+                rng_key + 12,
+                shape=(_HISTORY_NET_HIDDEN_DIM, _HISTORY_NET_HIDDEN_DIM))/_HISTORY_NET_HIDDEN_DIM,
+            history_net_output_layer=jax.random.normal(
+                rng_key + 13,
+                shape=(_DIM, _HISTORY_NET_HIDDEN_DIM))/_HISTORY_NET_HIDDEN_DIM,
         )
+
+    def history_embedding_vectors(self,
+                                  batch_history_vectors):
+        '''Computes the history embedding vectors.'''
+        transformed_features = jnp.einsum(
+            'bf,hf->bh', batch_history_vectors, self.history_net_input_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,ij->bj', transformed_features, self.history_net_hidden_layer)
+        transformed_features = jax.nn.relu(transformed_features)
+        transformed_features = jnp.einsum(
+            'bi,io->bo', transformed_features, self.history_net_output_layer)
+        return transformed_features
 
     def user_embedding_vectors(self,
                                batch_user_history_vectors,

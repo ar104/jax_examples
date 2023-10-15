@@ -86,8 +86,10 @@ def fwd_batch_opt_core(model_params,
         articles_garment_group=articles_garment_group
     )
     # Modify user embeddings by input features and history.
+    history_embedding_vectors = model_params.history_embedding_vectors(
+        input_item_embeddings[flat_items, :])
     user_history_vectors = jax.ops.segment_sum(
-        input_item_embeddings[flat_items, :],
+        history_embedding_vectors,
         flat_items_map,
         num_segments=batch_size
     ) / (jnp.expand_dims(seq_lengths_batch, axis=1) + _EPSILON)
@@ -95,14 +97,14 @@ def fwd_batch_opt_core(model_params,
         user_history_vectors, customer_ages_batch)
     # Note: negation in next line is reversed for positive examples
     # in the following line to it.
-    logits = -jnp.einsum('ij,kj->ki', input_item_embeddings,
-                         input_user_embeddings)
+    logits = jnp.einsum('ij,kj->ki', input_item_embeddings,
+                        input_user_embeddings)
     # Compute the softmax cross entropy loss.
     log_numerator = logits[flat_labels_map, flat_labels]
     log_denominator = jax.nn.logsumexp(logits, axis=1)[flat_labels_map]
-    # negative log likelihood
-    loss = jnp.mean(log_denominator - log_numerator)
-    return loss
+    # optimize negative log likelihood
+    nll = jnp.mean(log_denominator - log_numerator)
+    return nll
 
 
 # Not jittable due to dynamic repeat.
