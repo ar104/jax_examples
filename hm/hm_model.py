@@ -61,7 +61,7 @@ class HMModel(NamedTuple):
 
     def user_embedding_vectors(self,
                                batch_user_history_vectors,
-                               batch_user_ages):
+                               batch_user_ages, skip=True):
         '''Computes the user embedding vectors.'''
         features = (
             jnp.expand_dims(batch_user_ages, axis=1) *
@@ -75,7 +75,10 @@ class HMModel(NamedTuple):
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
             'bi,io->bo', transformed_features, self.user_net_output_layer)
-        return transformed_features
+        if skip:
+            return transformed_features + batch_user_history_vectors
+        else:
+            return transformed_features
 
     def item_embedding_vectors(self,
                                articles_color_group,
