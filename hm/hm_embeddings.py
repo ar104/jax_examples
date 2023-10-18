@@ -67,7 +67,7 @@ for name, value in model_parameters._asdict().items():
 ##########################################################
 
 
-# @partial(jax.jit, static_argnames=['batch_size'])
+@partial(jax.jit, static_argnames=['batch_size'])
 def fwd_batch_opt_core(model_params,
                        articles_color_group,
                        articles_section_name,
