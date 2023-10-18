@@ -1,5 +1,6 @@
 from functools import partial
 import argparse
+import gc
 import jax
 import jax.numpy as jnp
 from jaxopt import OptaxSolver
@@ -237,6 +238,9 @@ for epoch in range(start_epoch, 100):
             seq_history_batch = []
             seq_labels_batch = []
             seq_labels_count_batch = []
+    # Avoid possible memory leak.
+    jax.clear_caches()
+    gc.collect()
 
     if len(seq_labels_batch) > 0:
         # Use partial batch to compute loss metric only.
