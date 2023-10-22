@@ -71,6 +71,11 @@ customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
 articles_section_name = data['articles_section_name']
 articles_garment_group = data['articles_garment_group_name']
+customer_fn = data['customer_fn']
+customer_active = data['customer_active']
+customer_club_member_status = data['customer_club_member_status']
+customer_fashion_news_frequency = data['customer_fashion_news_frequency']
+customer_postal_code = data['customer_postal_code']
 saved_state = jnp.load(_EMBEDDINGS)
 # Load and adjust item embeddings.
 hm_model = HMModel(**saved_state)
@@ -98,13 +103,27 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
     freq_batch = []
     cid_batch = []
     customer_age_batch = []
+    customer_fn_batch = []
+    customer_active_batch = []
+    customer_club_member_status_batch = []
+    customer_fashion_news_frequency_batch = []
+    customer_postal_code_batch = []
     customer_history_vector_batch = []
     for index, cid in enumerate(pbar):
         if len(seq_items_batch) == _BATCH:
             precision, ap = process_batch(
                 hm_model.user_embedding_vectors(
                     jnp.stack(customer_history_vector_batch),
-                    jnp.asarray(customer_age_batch)),
+                    jnp.asarray(customer_age_batch),
+                    jnp.asarray(customer_fn_batch),
+                    jnp.asarray(customer_active_batch),
+                    jnp.asarray(
+                        customer_club_member_status_batch, jnp.int32),
+                    jnp.asarray(
+                        customer_fashion_news_frequency_batch, jnp.int32),
+                    jnp.asarray(
+                        customer_postal_code_batch, jnp.int32),
+                ),
                 item_embeddings,
                 seq_items_batch,
                 freq_batch,
@@ -124,6 +143,11 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             freq_batch = []
             cid_batch = []
             customer_age_batch = []
+            customer_fn_batch = []
+            customer_active_batch = []
+            customer_club_member_status_batch = []
+            customer_fashion_news_frequency_batch = []
+            customer_postal_code_batch = []
             customer_history_vector_batch = []
         item_history = items[index][:seq_lengths[index]]
         item_history = item_history[-_HISTORY:]
@@ -139,6 +163,13 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         freq_batch.append(example_freq)
         cid_batch.append(cid)
         customer_age_batch.append(customer_age[index])
+        customer_fn_batch.append(customer_fn[index])
+        customer_active_batch.append(customer_active[index])
+        customer_club_member_status_batch.append(
+            customer_club_member_status[index])
+        customer_fashion_news_frequency_batch.append(
+            customer_fashion_news_frequency[index])
+        customer_postal_code_batch.append(customer_postal_code[index])
 
     if len(cid_batch) > 0:
         precision, ap = process_batch(hm_model.user_embedding_vectors(
