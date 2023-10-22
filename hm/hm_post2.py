@@ -172,9 +172,19 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
         customer_postal_code_batch.append(customer_postal_code[index])
 
     if len(cid_batch) > 0:
-        precision, ap = process_batch(hm_model.user_embedding_vectors(
-            jnp.stack(customer_history_vector_batch),
-            jnp.asarray(customer_age_batch)),
+        precision, ap = process_batch(
+            hm_model.user_embedding_vectors(
+                jnp.stack(customer_history_vector_batch),
+                jnp.asarray(customer_age_batch),
+                jnp.asarray(customer_fn_batch),
+                jnp.asarray(customer_active_batch),
+                jnp.asarray(
+                    customer_club_member_status_batch, jnp.int32),
+                jnp.asarray(
+                    customer_fashion_news_frequency_batch, jnp.int32),
+                jnp.asarray(
+                    customer_postal_code_batch, jnp.int32),
+            ),
             item_embeddings,
             seq_items_batch, freq_batch, cid_batch, predictions)
         if sum_precision is None:
