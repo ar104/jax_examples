@@ -32,6 +32,13 @@ def encode_numerical(df, col_name):
 
 def encode_customer_features(df_customers):
     encode_numerical(df_customers, 'age')
+    encode_numerical(df_customers, 'FN')
+    encode_numerical(df_customers, 'Active')
+    df_customers['club_member_status'].fillna('UNK', inplace=True)
+    encode_categorical(df_customers, 'club_member_status')
+    df_customers['fashion_news_frequency'].fillna('UNK', inplace=True)
+    encode_categorical(df_customers, 'fashion_news_frequency')
+    encode_categorical(df_customers, 'postal_code')
 
 
 def encode_article_features(df_articles):
@@ -43,8 +50,7 @@ def encode_article_features(df_articles):
 
 
 start = time.time()
-df_customers = pd.read_csv(_DATASET + '/customers.csv')[
-    ['customer_id', 'age']]
+df_customers = pd.read_csv(_DATASET + '/customers.csv')
 df_articles = pd.read_csv(_DATASET + '/articles.csv')[
     ['article_id', 'colour_group_name', 'section_name', 'garment_group_name']]
 
@@ -79,6 +85,11 @@ training_examples_items_dedup = []
 seq_length_dedup = []
 training_examples_customer = []
 customer_age = []
+customer_fn = []
+customer_active = []
+customer_club_member_status = []
+customer_fashion_news_frequency = []
+customer_postal_code = []
 
 
 def parse_time(s):
@@ -90,6 +101,17 @@ pbar.set_description('Generate Samples')
 for k in pbar:
     training_examples_customer.append(k)
     customer_age.append(df_customers.loc[k]['age'])
+    customer_fn.append(df_customers.loc[k]['FN'])
+    customer_active.append(df_customers.loc[k]['Active'])
+    customer_club_member_status.append(
+        df_customers.loc[k]['club_member_status']
+    )
+    customer_fashion_news_frequency.append(
+        df_customers.loc[k]['fashion_news_frequency']
+    )
+    customer_postal_code.append(
+        df_customers.loc[k]['postal_code']
+    )
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
     purchases = [df_articles['enum'].loc[e[0]] for e in purchases[-HISTORY:]]
@@ -114,6 +136,11 @@ items_dedup = np.array(training_examples_items_dedup)
 seq_lengths = np.array(seq_length)
 seq_length_dedup = np.array(seq_length_dedup)
 customer_age = np.array(customer_age)
+customer_fn = np.array(customer_fn)
+customer_active = np.array(customer_active)
+customer_club_member_status = np.array(customer_club_member_status)
+customer_fashion_news_frequency = np.array(customer_fashion_news_frequency)
+customer_postal_code = np.array(customer_postal_code)
 articles_colour_group_name = np.array(df_articles['colour_group_name'])
 articles_section_name = np.array(df_articles['section_name'])
 articles_garment_group_name = np.array(df_articles['garment_group_name'])
@@ -124,6 +151,11 @@ np.savez(_DATASET + '/tensors_history.npz',
          items_dedup=items_dedup,
          seq_length_dedup=seq_length_dedup,
          customer_age=customer_age,
+         customer_fn=customer_fn,
+         customer_active=customer_active,
+         customer_club_member_status=customer_club_member_status,
+         customer_fashion_news_frequency=customer_fashion_news_frequency,
+         customer_postal_code=customer_postal_code,
          articles_color_group_name=articles_colour_group_name,
          articles_section_name=articles_section_name,
          articles_garment_group_name=articles_garment_group_name)

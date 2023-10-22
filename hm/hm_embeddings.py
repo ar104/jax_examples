@@ -36,6 +36,11 @@ customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
 articles_section_name = data['articles_section_name']
 articles_garment_group = data['articles_garment_group_name']
+customer_fn = data['customer_fn']
+customer_active = data['customer_active']
+customer_club_member_status = data['customer_club_member_status']
+customer_fashion_news_frequency = data['customer_fashion_news_frequency']
+customer_postal_code = data['customer_postal_code']
 
 print(f'Loaded arrays from disk in {time.time() - start} secs.')
 
@@ -44,6 +49,10 @@ n_users = items.shape[0]
 n_color_groups = int(jnp.max(articles_color_group)) + 1
 n_section_names = int(jnp.max(articles_section_name)) + 1
 n_garment_groups = int(jnp.max(articles_garment_group)) + 1
+n_customer_club_member_status = int(jnp.max(customer_club_member_status)) + 1
+n_customer_fashion_news_frequency = int(
+    jnp.max(customer_fashion_news_frequency)) + 1
+n_customer_postal_code = int(jnp.max(customer_postal_code)) + 1
 
 key = jax.random.PRNGKey(42)
 item_embeddings = None
@@ -55,7 +64,10 @@ if args.start_epoch == -1:
         n_articles=n_articles,
         n_color_groups=n_color_groups,
         n_section_names=n_section_names,
-        n_garment_groups=n_garment_groups)
+        n_garment_groups=n_garment_groups,
+        n_user_club_member_status=n_customer_club_member_status,
+        n_user_fashion_news_frequency=n_customer_fashion_news_frequency,
+        n_user_postal_code=n_customer_postal_code)
 else:
     print(f'Loading embeddings from checkpoint.')
     checkpoint = jnp.load(_DATASET + f'/embeddings_{args.start_epoch}.npz')
@@ -74,6 +86,11 @@ def fwd_batch_opt_core(model_params,
                        articles_section_name,
                        articles_garment_group,
                        customer_ages_batch,
+                       customer_fn_batch,
+                       customer_active_batch,
+                       customer_club_member_status_batch,
+                       customer_fashion_news_frequency_batch,
+                       customer_postal_code_batch,
                        flat_items,
                        flat_items_map,
                        seq_lengths_batch,
@@ -95,7 +112,14 @@ def fwd_batch_opt_core(model_params,
         num_segments=batch_size
     ) / (jnp.expand_dims(seq_lengths_batch, axis=1) + _EPSILON)
     input_user_embeddings = model_params.user_embedding_vectors(
-        user_history_vectors, customer_ages_batch)
+        user_history_vectors,
+        customer_ages_batch,
+        customer_fn_batch,
+        customer_active_batch,
+        customer_club_member_status_batch,
+        customer_fashion_news_frequency_batch,
+        customer_postal_code_batch,
+    )
     # Note: negation in next line is reversed for positive examples
     # in the following line to it.
     logits = jnp.einsum('ij,kj->ki', input_item_embeddings,
@@ -111,6 +135,11 @@ def fwd_batch_opt_core(model_params,
 # Not jittable due to dynamic repeat.
 def fwd_batch_opt(params: HMModel,
                   customer_ages_batch,
+                  customer_fn_batch,
+                  customer_active_batch,
+                  customer_club_member_status_batch,
+                  customer_fashion_news_frequency_batch,
+                  customer_postal_code_batch,
                   articles_color_group,
                   articles_section_name,
                   articles_garment_group,
@@ -132,6 +161,11 @@ def fwd_batch_opt(params: HMModel,
                               articles_garment_group,
                               # User features.
                               customer_ages_batch,
+                              customer_fn_batch,
+                              customer_active_batch,
+                              customer_club_member_status_batch,
+                              customer_fashion_news_frequency_batch,
+                              customer_postal_code_batch,
                               # Transactions.
                               flat_items,
                               flat_items_map,
@@ -170,6 +204,11 @@ for epoch in range(start_epoch, 100):
     seq_lengths_batch = []
     user_indices_batch = []
     customer_ages_batch = []
+    customer_fn_batch = []
+    customer_active_batch = []
+    customer_club_member_status_batch = []
+    customer_fashion_news_frequency_batch = []
+    customer_postal_code_batch = []
     label_indices = jax.random.randint(
         key=key + epoch + 1,
         shape=(train_indices.shape[0],),
@@ -184,18 +223,42 @@ for epoch in range(start_epoch, 100):
         seq_lengths_batch.append(label_indices[index])
         user_indices_batch.append(index)
         customer_ages_batch.append(customer_age[index])
+        customer_fn_batch.append(customer_fn[index])
+        customer_active_batch.append(customer_active[index])
+        customer_club_member_status_batch.append(
+            customer_club_member_status[index])
+        customer_fashion_news_frequency_batch.append(
+            customer_fashion_news_frequency[index])
+        customer_postal_code_batch.append(customer_postal_code[index])
         if len(seq_history_batch) == _BATCH:
             seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
             user_indices_batch_array = jnp.asarray(user_indices_batch)
             customer_ages_batch_array = jnp.asarray(customer_ages_batch)
+            customer_fn_batch_array = jnp.asarray(customer_fn_batch)
+            customer_active_batch_array = jnp.asarray(customer_active_batch)
+            customer_club_member_status_batch_array = jnp.asarray(
+                customer_club_member_status_batch, jnp.int32)
+            customer_fashion_news_frequency_batch_array = jnp.asarray(
+                customer_fashion_news_frequency_batch, jnp.int32)
+            customer_postal_code_batch_array = jnp.asarray(
+                customer_postal_code_batch, jnp.int32)
             seq_lengths_batch = []
             user_indices_batch = []
             customer_ages_batch = []
+            customer_fn_batch = []
+            customer_active_batch = []
+            customer_club_member_status_batch = []
+            customer_fashion_news_frequency_batch = []
+            customer_postal_code_batch = []
             if solver_initialized:
                 model_parameters, state = solver.update(
-                    params=model_parameters,
-                    state=state,
+                    params=model_parameters, state=state,
                     customer_ages_batch=customer_ages_batch_array,
+                    customer_fn_batch=customer_fn_batch_array,
+                    customer_active_batch=customer_active_batch_array,
+                    customer_club_member_status_batch=customer_club_member_status_batch_array,
+                    customer_fashion_news_frequency_batch=customer_fashion_news_frequency_batch_array,
+                    customer_postal_code_batch=customer_postal_code_batch_array,
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
@@ -207,6 +270,11 @@ for epoch in range(start_epoch, 100):
                 state = solver.init_state(
                     init_params=model_parameters,
                     customer_ages_batch=customer_ages_batch_array,
+                    customer_fn_batch=customer_fn_batch_array,
+                    customer_active_batch=customer_active_batch_array,
+                    customer_club_member_status_batch=customer_club_member_status_batch_array,
+                    customer_fashion_news_frequency_batch=customer_fashion_news_frequency_batch_array,
+                    customer_postal_code_batch=customer_postal_code_batch_array,
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
@@ -221,6 +289,11 @@ for epoch in range(start_epoch, 100):
                 loss = fwd_batch_opt(
                     model_parameters,
                     customer_ages_batch_array,
+                    customer_fn_batch_array,
+                    customer_active_batch_array,
+                    customer_club_member_status_batch_array,
+                    customer_fashion_news_frequency_batch_array,
+                    customer_postal_code_batch_array,
                     articles_color_group,
                     articles_section_name,
                     articles_garment_group,
@@ -247,9 +320,22 @@ for epoch in range(start_epoch, 100):
         seq_lengths_batch_array = jnp.asarray(seq_lengths_batch)
         user_indices_batch_array = jnp.asarray(user_indices_batch)
         customer_ages_batch_array = jnp.asarray(customer_ages_batch)
+        customer_fn_batch_array = jnp.asarray(customer_fn_batch)
+        customer_active_batch_array = jnp.asarray(customer_active_batch)
+        customer_club_member_status_batch_array = jnp.asarray(
+            customer_club_member_status_batch)
+        customer_fashion_news_frequency_batch_array = jnp.asarray(
+            customer_fashion_news_frequency_batch)
+        customer_postal_code_batch_array = jnp.asarray(
+            customer_postal_code_batch)
         loss = fwd_batch_opt(
             model_parameters,
             customer_ages_batch_array,
+            customer_fn_batch_array,
+            customer_active_batch_array,
+            customer_club_member_status_batch_array,
+            customer_fashion_news_frequency_batch_array,
+            customer_postal_code_batch_array,
             articles_color_group,
             articles_section_name,
             articles_garment_group,

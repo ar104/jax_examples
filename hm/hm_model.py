@@ -25,6 +25,11 @@ class HMModel(NamedTuple):
     history_net_input_layer: jnp.ndarray
     history_net_hidden_layer: jnp.ndarray
     history_net_output_layer: jnp.ndarray
+    user_club_member_status_embedding: jnp.ndarray
+    user_fashion_news_frequency_embedding: jnp.ndarray
+    user_postal_code_embedding: jnp.ndarray
+    user_fn_vector: jnp.ndarray
+    user_active_vector: jnp.ndarray
 
     @classmethod
     def factory(cls,
@@ -33,7 +38,10 @@ class HMModel(NamedTuple):
                 n_articles,
                 n_color_groups,
                 n_section_names,
-                n_garment_groups):
+                n_garment_groups,
+                n_user_club_member_status,
+                n_user_fashion_news_frequency,
+                n_user_postal_code):
         '''Constructs and returns initialized model parameters'''
         return HMModel(
             user_age_vector=jax.random.normal(rng_key + 1, shape=(_DIM,)) / 100,
@@ -69,6 +77,14 @@ class HMModel(NamedTuple):
             history_net_output_layer=jax.random.normal(
                 rng_key + 13,
                 shape=(_DIM, _HISTORY_NET_HIDDEN_DIM))/_HISTORY_NET_HIDDEN_DIM,
+            user_club_member_status_embedding=jax.random.normal(
+                rng_key + 14, shape=(n_user_club_member_status, _DIM)) / 100,
+            user_fashion_news_frequency_embedding=jax.random.normal(
+                rng_key + 15, shape=(n_user_fashion_news_frequency, _DIM)) / 100,
+            user_postal_code_embedding=jax.random.normal(
+                rng_key + 16, shape=(n_user_postal_code, _DIM)) / 100,
+            user_fn_vector=jax.random.normal(rng_key + 17, shape=(_DIM,)) / 100,
+            user_active_vector=jax.random.normal(rng_key + 18, shape=(_DIM,)) / 100,
         )
 
     def history_embedding_vectors(self,
@@ -86,12 +102,31 @@ class HMModel(NamedTuple):
 
     def user_embedding_vectors(self,
                                batch_user_history_vectors,
-                               batch_user_ages, skip=True):
+                               batch_user_ages,
+                               customer_fn_batch,
+                               customer_active_batch,
+                               customer_club_member_status_batch,
+                               customer_fashion_news_frequency_batch,
+                               customer_postal_code_batch,
+                               skip=True):
         '''Computes the user embedding vectors.'''
-        features = (
+        features = batch_user_history_vectors + (
             jnp.expand_dims(batch_user_ages, axis=1) *
             jnp.expand_dims(self.user_age_vector, axis=0)
-        ) + batch_user_history_vectors
+        )
+        + (
+            jnp.expand_dims(customer_fn_batch, axis=1) *
+            jnp.expand_dims(self.user_fn_vector, axis=0)
+        ) + (
+            jnp.expand_dims(customer_active_batch, axis=1) *
+            jnp.expand_dims(self.user_active_vector, axis=0)
+        ) + (
+            self.user_club_member_status_embedding
+            [customer_club_member_status_batch, :]) + (
+            self.user_fashion_news_frequency_embedding
+            [customer_fashion_news_frequency_batch, :]) + (
+            self.user_postal_code_embedding[customer_postal_code_batch, :]
+        )
         transformed_features = jnp.einsum(
             'bf,hf->bh', features, self.user_net_input_layer)
         transformed_features = jax.nn.relu(transformed_features)
