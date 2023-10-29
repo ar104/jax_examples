@@ -1,7 +1,7 @@
 import argparse
 from collections import defaultdict
 import pandas as pd
-from hm_model import HMModel
+from hm_model import HMModel, compute_pe_matrix
 import jax
 import jax.numpy as jnp
 from tqdm import tqdm
@@ -9,7 +9,7 @@ import time
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _EMBEDDINGS = _DATASET + '/embeddings_0.npz'
-_HISTORY = 64
+_HISTORY = 1024
 _RETRIEVE_K = 200
 _K = 12
 _BATCH = 4096
@@ -66,6 +66,7 @@ items_dup = data['items']
 seq_lengths_dup = data['seq_lengths']
 # Use duplicate items in history.
 items = data['items']
+timestamps = data['timestamps']
 seq_lengths = data['seq_lengths']
 customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
@@ -97,6 +98,7 @@ item_freq = defaultdict(lambda: 0)
 sum_precision = None
 sum_ap = None
 count_precision = 0
+pe_matrix = compute_pe_matrix()
 with open(_DATASET + '/predictions.csv', 'w') as predictions:
     predictions.write('customer_id,prediction\n')
     seq_items_batch = []
@@ -151,6 +153,8 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             customer_history_vector_batch = []
         item_history = items[index][:seq_lengths[index]]
         item_history = item_history[-_HISTORY:]
+        item_timestamps = timestamps[index][:seq_lengths[index]]
+        item_timestamps = item_timestamps[-_HISTORY:]
         for i in item_history:
             item_freq[i] += 1
         example_freq = defaultdict(lambda: 0)
@@ -158,8 +162,11 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             example_freq[i] += 1
         seq_items_batch.append(item_history)
         customer_history_vector_batch.append(
-            jnp.mean(hm_model.history_embedding_vectors(
-                item_embeddings[item_history, :]), axis=0))
+            jnp.mean(
+                hm_model.history_embedding_vectors(
+                    item_embeddings[item_history, :] +
+                    pe_matrix[item_timestamps, :]),
+                axis=0))
         freq_batch.append(example_freq)
         cid_batch.append(cid)
         customer_age_batch.append(customer_age[index])
