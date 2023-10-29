@@ -65,10 +65,13 @@ df_articles.set_index('article_id', inplace=True)
 
 # Read transaction data.
 transactions = pd.read_csv(_DATASET + '/transactions_train.csv')
+start_of_dataset = datetime.strptime(transactions['t_dat'].min(), '%Y-%M-%d')
 transactions = pd.DataFrame(
     data={'customer_id': transactions['customer_id'].to_list(),
           'feature': list(zip(transactions['article_id'].to_list(),
-                              transactions['t_dat'].to_list()))})
+                              [(datetime.strptime(e, '%Y-%M-%d') -
+                                start_of_dataset).days
+                               for e in transactions['t_dat'].to_list()]))})
 print(f'Loaded data and encoded entity features in '
       f'{time.time() - start} seconds.')
 
@@ -80,9 +83,8 @@ training_features = grouped_transactions.to_dict()
 del grouped_transactions
 del transactions
 training_examples_items = []
+training_examples_times = []
 seq_length = []
-training_examples_items_dedup = []
-seq_length_dedup = []
 training_examples_customer = []
 customer_age = []
 customer_fn = []
@@ -114,27 +116,22 @@ for k in pbar:
     )
     purchases = training_features[k]
     purchases.sort(key=lambda e: e[1])
+    purchase_times = [e[1] for e in purchases[-HISTORY:]]
     purchases = [df_articles['enum'].loc[e[0]] for e in purchases[-HISTORY:]]
-    deduped_purchases = list(set(purchases))
-    # With dups
     seq_length.append(len(purchases))
     short = HISTORY - len(purchases)
     if short > 0:
         purchases.extend([-1]*short)
+        purchase_times.extend([-1]*short)
     training_examples_items.append(purchases)
-    # Without dups
-    seq_length_dedup.append(len(deduped_purchases))
-    short = HISTORY - len(deduped_purchases)
-    if short > 0:
-        deduped_purchases.extend([-1]*short)
-    training_examples_items_dedup.append(deduped_purchases)
+    training_examples_times.append(purchase_times)
+
 
 del training_features
 
 items = np.array(training_examples_items)
-items_dedup = np.array(training_examples_items_dedup)
+timestamps = np.array(training_examples_times)
 seq_lengths = np.array(seq_length)
-seq_length_dedup = np.array(seq_length_dedup)
 customer_age = np.array(customer_age)
 customer_fn = np.array(customer_fn)
 customer_active = np.array(customer_active)
@@ -147,9 +144,8 @@ articles_garment_group_name = np.array(df_articles['garment_group_name'])
 
 np.savez(_DATASET + '/tensors_history.npz',
          items=items,
+         timestamps=timestamps,
          seq_lengths=seq_lengths,
-         items_dedup=items_dedup,
-         seq_length_dedup=seq_length_dedup,
          customer_age=customer_age,
          customer_fn=customer_fn,
          customer_active=customer_active,

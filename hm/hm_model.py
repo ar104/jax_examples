@@ -7,6 +7,17 @@ _DIM = 32
 _ITEM_NET_HIDDEN_DIM = 32
 _USER_NET_HIDDEN_DIM = 32
 _HISTORY_NET_HIDDEN_DIM = 32
+_MAX_DAYS = 5000
+
+
+def compute_pe_matrix():
+    pe = jnp.zeros(shape=(_MAX_DAYS, _DIM))
+    position = jnp.arange(0, _MAX_DAYS, dtype=jnp.float32)
+    div_term = jnp.exp(jnp.arange(0, _DIM, 2)*(-jnp.log(10000.0))/_DIM)
+    product = jnp.einsum('i,j->ij', position, div_term)
+    pe = pe.at[:, 0::2].set(jnp.sin(product))
+    pe = pe.at[:, 1::2].set(jnp.cos(product))
+    return pe
 
 
 class HMModel(NamedTuple):

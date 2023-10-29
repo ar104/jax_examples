@@ -8,7 +8,7 @@ import optax
 import time
 from tqdm import tqdm
 
-from hm_model import HMModel
+from hm_model import HMModel, compute_pe_matrix
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
@@ -31,6 +31,7 @@ print(jax.devices())
 start = time.time()
 data = jnp.load(_DATASET + '/tensors_history.npz')
 items = data['items']
+timestamps = data['timestamps']
 seq_lengths = data['seq_lengths']
 customer_age = data['customer_age']
 articles_color_group = data['articles_color_group_name']
@@ -92,6 +93,7 @@ def fwd_batch_opt_core(model_params,
                        customer_fashion_news_frequency_batch,
                        customer_postal_code_batch,
                        flat_items,
+                       flat_position_vectors,
                        flat_items_map,
                        seq_lengths_batch,
                        flat_labels,
@@ -105,7 +107,7 @@ def fwd_batch_opt_core(model_params,
     )
     # Modify user embeddings by input features and history.
     history_embedding_vectors = model_params.history_embedding_vectors(
-        input_item_embeddings[flat_items, :])
+        input_item_embeddings[flat_items, :] + flat_position_vectors)
     user_history_vectors = jax.ops.segment_sum(
         history_embedding_vectors,
         flat_items_map,
@@ -146,10 +148,12 @@ def fwd_batch_opt(params: HMModel,
                   seq_labels_batch,
                   seq_labels_count_batch,
                   seq_history_batch,
+                  seq_position_vectors_batch,
                   seq_lengths_batch: jnp.ndarray):
     batch_size = len(seq_history_batch)
     # Flatten items from all examples into a single vector.
     flat_items = jnp.concatenate(seq_history_batch, axis=0)
+    flat_position_vectors = jnp.concatenate(seq_position_vectors_batch, axis=0)
     flat_items_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
     flat_labels = jnp.concatenate(seq_labels_batch, axis=0)
     flat_labels_map = jnp.repeat(
@@ -168,6 +172,7 @@ def fwd_batch_opt(params: HMModel,
                               customer_postal_code_batch,
                               # Transactions.
                               flat_items,
+                              flat_position_vectors,
                               flat_items_map,
                               seq_lengths_batch,
                               # Labels
@@ -188,6 +193,7 @@ else:
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 start_epoch = max(0, args.start_epoch)
+pe_matrix = compute_pe_matrix()
 for epoch in range(start_epoch, 100):
     train_indices = jax.random.choice(
         key + epoch, items.shape[0],
@@ -201,6 +207,7 @@ for epoch in range(start_epoch, 100):
     seq_labels_batch = []
     seq_labels_count_batch = []
     seq_history_batch = []
+    seq_position_vectors_batch = []
     seq_lengths_batch = []
     user_indices_batch = []
     customer_ages_batch = []
@@ -215,12 +222,21 @@ for epoch in range(start_epoch, 100):
         minval=0,
         maxval=seq_lengths[train_indices])
     for index in pbar:
-        seq_history = items[index][:label_indices[index]]
-        seq_labels = items[index][label_indices[index]:]
-        seq_labels_batch.append(seq_labels)
+        root_timestamp = timestamps[index][label_indices[index]]
+        seq_history = []
+        seq_labels = []
+        seq_timestamps = []
+        for i in range(seq_lengths[index]):
+            if timestamps[index][i] < root_timestamp:
+                seq_history.append(items[index][i])
+                seq_timestamps.append(root_timestamp - timestamps[index][i])
+            elif (timestamps[index][i] - root_timestamp) < 16:
+                seq_labels.append(items[index][i])
+        seq_labels_batch.append(jnp.asarray(seq_labels, dtype=jnp.int32))
         seq_labels_count_batch.append(len(seq_labels))
-        seq_history_batch.append(seq_history)
-        seq_lengths_batch.append(label_indices[index])
+        seq_history_batch.append(jnp.asarray(seq_history, dtype=jnp.int32))
+        seq_position_vectors_batch.append(pe_matrix[seq_timestamps, :])
+        seq_lengths_batch.append(len(seq_history))
         user_indices_batch.append(index)
         customer_ages_batch.append(customer_age[index])
         customer_fn_batch.append(customer_fn[index])
@@ -265,6 +281,7 @@ for epoch in range(start_epoch, 100):
                     seq_labels_batch=seq_labels_batch,
                     seq_labels_count_batch=seq_labels_count_batch,
                     seq_history_batch=seq_history_batch,
+                    seq_position_vectors_batch=seq_position_vectors_batch,
                     seq_lengths_batch=seq_lengths_batch_array)
             else:
                 state = solver.init_state(
@@ -281,6 +298,7 @@ for epoch in range(start_epoch, 100):
                     seq_labels_batch=seq_labels_batch,
                     seq_labels_count_batch=seq_labels_count_batch,
                     seq_history_batch=seq_history_batch,
+                    seq_position_vectors_batch=seq_position_vectors_batch,
                     seq_lengths_batch=seq_lengths_batch_array)
                 solver_initialized = True
             batches += 1
@@ -300,6 +318,7 @@ for epoch in range(start_epoch, 100):
                     seq_labels_batch,
                     seq_labels_count_batch,
                     seq_history_batch,
+                    seq_position_vectors_batch,
                     seq_lengths_batch_array)
                 if sum_loss is None:
                     sum_loss = loss
@@ -309,6 +328,7 @@ for epoch in range(start_epoch, 100):
                 pbar.set_description(
                     f'epoch {epoch} avg loss {sum_loss/items_loss:.4f}')
             seq_history_batch = []
+            seq_position_vectors_batch = []
             seq_labels_batch = []
             seq_labels_count_batch = []
     # Avoid possible memory leak.
@@ -342,6 +362,7 @@ for epoch in range(start_epoch, 100):
             seq_labels_batch,
             seq_labels_count_batch,
             seq_history_batch,
+            seq_position_vectors_batch,
             seq_lengths_batch_array)
         loss = (loss/seq_lengths_batch_array.shape[0])
         if sum_loss is None:
