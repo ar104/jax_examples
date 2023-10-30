@@ -18,8 +18,8 @@ _BATCH = 4096
 @jax.jit
 def topk_batch_opt(user_embeddings, item_embeddings):
     logits = jnp.einsum('ij,kj->ki', item_embeddings, user_embeddings)
-    _, topk = jax.lax.top_k(logits, _RETRIEVE_K)
-    return topk
+    topk_logits, topk = jax.lax.top_k(logits, _RETRIEVE_K)
+    return topk_logits, topk
 
 
 def metrics(pred, truth):
@@ -46,11 +46,15 @@ def process_batch(
         predictions):
     precisions = []
     aps = []
-    topk_batch = topk_batch_opt(user_embeddings, item_embeddings)
+    topk_logits_batch, topk_batch = topk_batch_opt(
+        user_embeddings, item_embeddings)
+    topk_logits_batch = topk_logits_batch.tolist()
     topk_batch = topk_batch.tolist()
-    for cid, topk_list, past, freq in zip(
-            cid_batch, topk_batch, seq_items_batch, freq_batch):
-        topk_list = [(-freq[index], index) for index in topk_list]
+    for cid, topk_list, topk_logits, past, freq in zip(
+            cid_batch, topk_batch, topk_logits_batch, seq_items_batch,
+            freq_batch):
+        topk_list = [(-freq[index], -logit, index)
+                     for logit, index in zip(topk_logits, topk_list)]
         topk_list = [e[1] for e in sorted(topk_list)][:_K]
         precision, ap = metrics(topk_list, past)
         precisions.append(precision)
@@ -152,9 +156,7 @@ with open(_DATASET + '/predictions.csv', 'w') as predictions:
             customer_postal_code_batch = []
             customer_history_vector_batch = []
         item_history = items[index][:seq_lengths[index]]
-        item_history = item_history[-_HISTORY:]
         item_timestamps = timestamps[index][:seq_lengths[index]]
-        item_timestamps = item_timestamps[-_HISTORY:]
         for i in item_history:
             item_freq[i] += 1
         example_freq = defaultdict(lambda: 0)
