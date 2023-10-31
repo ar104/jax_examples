@@ -15,7 +15,7 @@ _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _EPOCH_EXAMPLES = 256000
 _BATCH = 128
 _LR = 1e-4
-_LAMBDA = 5e-1
+_LAMBDA = 1e-3
 _EPSILON = 1e-6
 
 
