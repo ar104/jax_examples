@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from jaxopt import OptaxSolver
 import optax
+import random
 import time
 from tqdm import tqdm
 
@@ -225,9 +226,9 @@ for epoch in range(start_epoch, 100):
     customer_postal_code_batch = []
     label_indices = jax.random.randint(
         key=key + epoch + 1,
-        shape=(train_indices.shape[0],),
+        shape=(items.shape[0],),
         minval=0,
-        maxval=seq_lengths[train_indices])
+        maxval=seq_lengths)
     for index in pbar:
         root_timestamp = timestamps[index][label_indices[index]]
         seq_history = []
@@ -239,8 +240,9 @@ for epoch in range(start_epoch, 100):
                 seq_timestamps.append(root_timestamp - timestamps[index][i])
             elif (timestamps[index][i] - root_timestamp) < 16:
                 seq_labels.append(items[index][i])
-        seq_labels_batch.append(jnp.asarray(seq_labels, dtype=jnp.int32))
-        seq_labels_count_batch.append(len(seq_labels))
+        seq_labels_batch.append(
+            jnp.asarray([random.choice(seq_labels)], dtype=jnp.int32))
+        seq_labels_count_batch.append(1)
         seq_history_batch.append(jnp.asarray(seq_history, dtype=jnp.int32))
         seq_position_vectors_batch.append(pe_matrix[seq_timestamps, :])
         seq_lengths_batch.append(len(seq_history))
