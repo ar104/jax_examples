@@ -105,10 +105,10 @@ class HMModel(NamedTuple):
             'bf,hf->bh', batch_history_vectors, self.history_net_input_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,ij->bj', transformed_features, self.history_net_hidden_layer)
+            'bh,jh->bj', transformed_features, self.history_net_hidden_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,io->bo', transformed_features, self.history_net_output_layer)
+            'bj,oj->bo', transformed_features, self.history_net_output_layer)
         return transformed_features
 
     def user_embedding_vectors(self,
@@ -142,10 +142,10 @@ class HMModel(NamedTuple):
             'bf,hf->bh', features, self.user_net_input_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,ij->bj', transformed_features, self.user_net_hidden_layer)
+            'bh,jh->bj', transformed_features, self.user_net_hidden_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,io->bo', transformed_features, self.user_net_output_layer)
+            'bj,oj->bo', transformed_features, self.user_net_output_layer)
         if skip:
             return transformed_features + batch_user_history_vectors
         else:
@@ -164,8 +164,8 @@ class HMModel(NamedTuple):
             'bf,hf->bh', features, self.item_net_input_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,ij->bj', transformed_features, self.item_net_hidden_layer)
+            'bh,jh->bj', transformed_features, self.item_net_hidden_layer)
         transformed_features = jax.nn.relu(transformed_features)
         transformed_features = jnp.einsum(
-            'bi,io->bo', transformed_features, self.item_net_output_layer)
+            'bj,oj->bo', transformed_features, self.item_net_output_layer)
         return (self.item_embeddings + transformed_features)
