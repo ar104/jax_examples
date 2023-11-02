@@ -187,14 +187,7 @@ def fwd_batch_opt(params: HMModel,
 if args.optimizer == 'SGD':
     opt = optax.sgd(_LR)
 elif args.optimizer == 'Adam':
-    exponential_decay_scheduler = optax.exponential_decay(
-        init_value=_LR,
-        transition_steps=2000,  # 1 epoch
-        decay_rate=0.1,
-        transition_begin=6000,  # begin at 4th epoch
-        staircase=False
-    )
-    opt = optax.adamw(exponential_decay_scheduler, weight_decay=_LAMBDA)
+    opt = optax.adamw(_LR, weight_decay=_LAMBDA)
 else:
     print(f'Unknown optimizer {args.optimizer}')
     exit(-1)
