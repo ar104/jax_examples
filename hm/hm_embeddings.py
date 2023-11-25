@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from jaxopt import OptaxSolver
 import optax
+import pickle
 import random
 import time
 from tqdm import tqdm
@@ -72,11 +73,8 @@ if args.start_epoch == -1:
         n_user_postal_code=n_customer_postal_code)
 else:
     print(f'Loading embeddings from checkpoint.')
-    checkpoint = jnp.load(_DATASET + f'/embeddings_{args.start_epoch}.npz')
-    model_parameters = HMModel(**checkpoint)
-
-for name, value in model_parameters._asdict().items():
-    print(f'{name} {value.shape}')
+    with open(f'{_DATASET}/embeddings_{args.start_epoch}.pickle', 'rb') as f:
+        model_parameters = pickle.load(f)
 
 # Optimized (vectorized computation over all examples in batch)
 ##########################################################
@@ -373,6 +371,5 @@ for epoch in range(start_epoch, 100):
             sum_loss += loss
         items_loss += 1
     print(f'Epoch = {epoch} loss = {sum_loss/items_loss:.4f}')
-
-    jnp.savez(
-        _DATASET + f'/embeddings_{epoch}.npz', **model_parameters._asdict())
+    with open(f'{_DATASET}/embeddings_{epoch}.pickle', 'wb') as f:
+        pickle.dump(model_parameters,  f)

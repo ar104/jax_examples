@@ -20,22 +20,47 @@ def compute_pe_matrix():
     return pe
 
 
+class NN(NamedTuple):
+    '''Trainable weights'''
+    input_layer: jnp.ndarray
+    hidden_layer: jnp.ndarray
+    output_layer: jnp.ndarray
+
+    @classmethod
+    def factory(self, rng_key, dim_input, dim_hidden, dim_output):
+        # Generate keys to seed RNGs for parameters.
+        rng_key, subkey1 = jax.random.split(rng_key)
+        rng_key, subkey2 = jax.random.split(rng_key)
+        _, subkey3 = jax.random.split(rng_key)
+        return NN(
+            input_layer=jax.random.normal(
+                subkey1, shape=(dim_hidden, dim_input))/dim_input,
+            hidden_layer=jax.random.normal(
+                subkey2, shape=(dim_hidden, dim_hidden))/dim_hidden,
+            output_layer=jax.random.normal(
+                subkey3, shape=(dim_output, dim_hidden))/dim_hidden
+        )
+
+
+def forward_NN(nn: NN, input: jnp.ndarray) -> jnp.ndarray:
+    x = jnp.einsum('bf,hf->bh', input,  nn.input_layer)
+    x = jax.nn.relu(x)
+    x = jnp.einsum('bh,jh->bj', x, nn.hidden_layer)
+    x = jax.nn.relu(x)
+    x = jnp.einsum('bj,oj->bo', x, nn.output_layer)
+    return x
+
+
 class HMModel(NamedTuple):
     '''Holds all trainable weights.'''
     user_age_vector: jnp.ndarray
-    user_net_input_layer: jnp.ndarray
-    user_net_hidden_layer: jnp.ndarray
-    user_net_output_layer: jnp.ndarray
+    user_net: NN
     item_embeddings: jnp.ndarray
     color_group_embeddings: jnp.ndarray
     section_name_embeddings: jnp.ndarray
     garment_group_embeddings: jnp.ndarray
-    item_net_input_layer: jnp.ndarray
-    item_net_hidden_layer: jnp.ndarray
-    item_net_output_layer: jnp.ndarray
-    history_net_input_layer: jnp.ndarray
-    history_net_hidden_layer: jnp.ndarray
-    history_net_output_layer: jnp.ndarray
+    item_net: NN
+    history_net: NN
     user_club_member_status_embedding: jnp.ndarray
     user_fashion_news_frequency_embedding: jnp.ndarray
     user_postal_code_embedding: jnp.ndarray
@@ -64,30 +89,12 @@ class HMModel(NamedTuple):
                 rng_key + 4, shape=(n_section_names, _DIM)) / 100,
             garment_group_embeddings=jax.random.normal(
                 rng_key + 4, shape=(n_garment_groups, _DIM)) / 100,
-            item_net_input_layer=jax.random.normal(
-                rng_key + 5, shape=(_ITEM_NET_HIDDEN_DIM, _DIM))/_DIM,
-            item_net_hidden_layer=jax.random.normal(
-                rng_key + 6,
-                shape=(_ITEM_NET_HIDDEN_DIM, _ITEM_NET_HIDDEN_DIM))/_ITEM_NET_HIDDEN_DIM,
-            item_net_output_layer=jax.random.normal(
-                rng_key + 7,
-                shape=(_DIM, _ITEM_NET_HIDDEN_DIM))/_ITEM_NET_HIDDEN_DIM,
-            user_net_input_layer=jax.random.normal(
-                rng_key + 8, shape=(_USER_NET_HIDDEN_DIM, _DIM))/_DIM,
-            user_net_hidden_layer=jax.random.normal(
-                rng_key + 9,
-                shape=(_USER_NET_HIDDEN_DIM, _USER_NET_HIDDEN_DIM))/_USER_NET_HIDDEN_DIM,
-            user_net_output_layer=jax.random.normal(
-                rng_key + 10,
-                shape=(_DIM, _USER_NET_HIDDEN_DIM))/_USER_NET_HIDDEN_DIM,
-            history_net_input_layer=jax.random.normal(
-                rng_key + 11, shape=(_HISTORY_NET_HIDDEN_DIM, _DIM))/_DIM,
-            history_net_hidden_layer=jax.random.normal(
-                rng_key + 12,
-                shape=(_HISTORY_NET_HIDDEN_DIM, _HISTORY_NET_HIDDEN_DIM))/_HISTORY_NET_HIDDEN_DIM,
-            history_net_output_layer=jax.random.normal(
-                rng_key + 13,
-                shape=(_DIM, _HISTORY_NET_HIDDEN_DIM))/_HISTORY_NET_HIDDEN_DIM,
+            item_net=NN.factory(
+                rng_key + 5, _DIM, _ITEM_NET_HIDDEN_DIM, _DIM),
+            user_net=NN.factory(
+                rng_key + 6, _DIM, _USER_NET_HIDDEN_DIM, _DIM),
+            history_net=NN.factory(
+                rng_key + 7, _DIM, _HISTORY_NET_HIDDEN_DIM, _DIM),
             user_club_member_status_embedding=jax.random.normal(
                 rng_key + 14, shape=(n_user_club_member_status, _DIM)) / 100,
             user_fashion_news_frequency_embedding=jax.random.normal(
@@ -95,21 +102,13 @@ class HMModel(NamedTuple):
             user_postal_code_embedding=jax.random.normal(
                 rng_key + 16, shape=(n_user_postal_code, _DIM)) / 100,
             user_fn_vector=jax.random.normal(rng_key + 17, shape=(_DIM,)) / 100,
-            user_active_vector=jax.random.normal(rng_key + 18, shape=(_DIM,)) / 100,
-        )
+            user_active_vector=jax.random.normal(
+                rng_key + 18, shape=(_DIM,)) / 100,)
 
     def history_embedding_vectors(self,
                                   batch_history_vectors):
         '''Computes the history embedding vectors.'''
-        transformed_features = jnp.einsum(
-            'bf,hf->bh', batch_history_vectors, self.history_net_input_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bh,jh->bj', transformed_features, self.history_net_hidden_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bj,oj->bo', transformed_features, self.history_net_output_layer)
-        return transformed_features
+        return forward_NN(self.history_net, batch_history_vectors)
 
     def user_embedding_vectors(self,
                                batch_user_history_vectors,
@@ -138,14 +137,7 @@ class HMModel(NamedTuple):
             [customer_fashion_news_frequency_batch, :]) + (
             self.user_postal_code_embedding[customer_postal_code_batch, :]
         )
-        transformed_features = jnp.einsum(
-            'bf,hf->bh', features, self.user_net_input_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bh,jh->bj', transformed_features, self.user_net_hidden_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bj,oj->bo', transformed_features, self.user_net_output_layer)
+        transformed_features = forward_NN(self.user_net, features)
         if skip:
             return transformed_features + batch_user_history_vectors
         else:
@@ -160,12 +152,5 @@ class HMModel(NamedTuple):
                     self.section_name_embeddings[articles_section_name] +
                     self.garment_group_embeddings[articles_garment_group]
                     )
-        transformed_features = jnp.einsum(
-            'bf,hf->bh', features, self.item_net_input_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bh,jh->bj', transformed_features, self.item_net_hidden_layer)
-        transformed_features = jax.nn.relu(transformed_features)
-        transformed_features = jnp.einsum(
-            'bj,oj->bo', transformed_features, self.item_net_output_layer)
+        transformed_features = forward_NN(self.item_net, features)
         return (self.item_embeddings + transformed_features)

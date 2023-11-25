@@ -4,12 +4,12 @@ import pandas as pd
 from hm_model import HMModel, compute_pe_matrix
 import jax
 import jax.numpy as jnp
+import pickle
 from tqdm import tqdm
 import time
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
-_EMBEDDINGS = _DATASET + '/embeddings_0.npz'
-_HISTORY = 1024
+_EMBEDDINGS = _DATASET + '/embeddings_0.pickle'
 _RETRIEVE_K = 200
 _K = 12
 _BATCH = 4096
@@ -81,9 +81,9 @@ customer_active = data['customer_active']
 customer_club_member_status = data['customer_club_member_status']
 customer_fashion_news_frequency = data['customer_fashion_news_frequency']
 customer_postal_code = data['customer_postal_code']
-saved_state = jnp.load(_EMBEDDINGS)
+with open(f'{_EMBEDDINGS}', 'rb') as f:
+    hm_model = pickle.load(f)
 # Load and adjust item embeddings.
-hm_model = HMModel(**saved_state)
 item_embeddings = hm_model.item_embedding_vectors(
     articles_color_group, articles_section_name, articles_garment_group)
 mapping = pd.read_csv(_DATASET + '/item_map.csv')
