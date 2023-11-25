@@ -1,6 +1,7 @@
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
+from hm_encoder import HMEncoder
 
 
 _DIM = 32
@@ -53,24 +54,14 @@ def forward_NN(nn: NN, input: jnp.ndarray) -> jnp.ndarray:
 
 class HMModel(NamedTuple):
     '''Holds all trainable weights.'''
-    user_age_vector: jnp.ndarray
+    encoder: HMEncoder
     user_net: NN
-    item_embeddings: jnp.ndarray
-    color_group_embeddings: jnp.ndarray
-    section_name_embeddings: jnp.ndarray
-    garment_group_embeddings: jnp.ndarray
     item_net: NN
     history_net: NN
-    user_club_member_status_embedding: jnp.ndarray
-    user_fashion_news_frequency_embedding: jnp.ndarray
-    user_postal_code_embedding: jnp.ndarray
-    user_fn_vector: jnp.ndarray
-    user_active_vector: jnp.ndarray
 
     @classmethod
     def factory(cls,
                 rng_key,
-                n_users,
                 n_articles,
                 n_color_groups,
                 n_section_names,
@@ -79,31 +70,27 @@ class HMModel(NamedTuple):
                 n_user_fashion_news_frequency,
                 n_user_postal_code):
         '''Constructs and returns initialized model parameters'''
+        rng_key, encoder_rng_key = jax.random.split(rng_key)
+        rng_key, user_rng_key = jax.random.split(rng_key)
+        rng_key, item_rng_key = jax.random.split(rng_key)
+        rng_key, history_rng_key = jax.random.split(rng_key)
         return HMModel(
-            user_age_vector=jax.random.normal(rng_key + 1, shape=(_DIM,)) / 100,
-            item_embeddings=jax.random.normal(
-                rng_key + 2, shape=(n_articles, _DIM)) / 1000,
-            color_group_embeddings=jax.random.normal(
-                rng_key + 3, shape=(n_color_groups, _DIM)) / 100,
-            section_name_embeddings=jax.random.normal(
-                rng_key + 4, shape=(n_section_names, _DIM)) / 100,
-            garment_group_embeddings=jax.random.normal(
-                rng_key + 4, shape=(n_garment_groups, _DIM)) / 100,
-            item_net=NN.factory(
-                rng_key + 5, _DIM, _ITEM_NET_HIDDEN_DIM, _DIM),
             user_net=NN.factory(
-                rng_key + 6, _DIM, _USER_NET_HIDDEN_DIM, _DIM),
+                user_rng_key, _DIM, _USER_NET_HIDDEN_DIM, _DIM),
+            item_net=NN.factory(
+                item_rng_key, _DIM, _ITEM_NET_HIDDEN_DIM, _DIM),
             history_net=NN.factory(
-                rng_key + 7, _DIM, _HISTORY_NET_HIDDEN_DIM, _DIM),
-            user_club_member_status_embedding=jax.random.normal(
-                rng_key + 14, shape=(n_user_club_member_status, _DIM)) / 100,
-            user_fashion_news_frequency_embedding=jax.random.normal(
-                rng_key + 15, shape=(n_user_fashion_news_frequency, _DIM)) / 100,
-            user_postal_code_embedding=jax.random.normal(
-                rng_key + 16, shape=(n_user_postal_code, _DIM)) / 100,
-            user_fn_vector=jax.random.normal(rng_key + 17, shape=(_DIM,)) / 100,
-            user_active_vector=jax.random.normal(
-                rng_key + 18, shape=(_DIM,)) / 100,)
+                history_rng_key, _DIM, _HISTORY_NET_HIDDEN_DIM, _DIM),
+            encoder=HMEncoder.factory(encoder_rng_key,
+                                      _DIM,
+                                      n_articles,
+                                      n_color_groups,
+                                      n_section_names,
+                                      n_garment_groups,
+                                      n_user_club_member_status,
+                                      n_user_fashion_news_frequency,
+                                      n_user_postal_code),
+        )
 
     def history_embedding_vectors(self,
                                   batch_history_vectors):
@@ -122,20 +109,21 @@ class HMModel(NamedTuple):
         '''Computes the user embedding vectors.'''
         features = batch_user_history_vectors + (
             jnp.expand_dims(batch_user_ages, axis=1) *
-            jnp.expand_dims(self.user_age_vector, axis=0)
+            jnp.expand_dims(self.encoder.user_age_vector, axis=0)
         )
         + (
             jnp.expand_dims(customer_fn_batch, axis=1) *
-            jnp.expand_dims(self.user_fn_vector, axis=0)
+            jnp.expand_dims(self.encoder.user_fn_vector, axis=0)
         ) + (
             jnp.expand_dims(customer_active_batch, axis=1) *
-            jnp.expand_dims(self.user_active_vector, axis=0)
+            jnp.expand_dims(self.encoder.user_active_vector, axis=0)
         ) + (
-            self.user_club_member_status_embedding
+            self.encoder.user_club_member_status_embedding
             [customer_club_member_status_batch, :]) + (
-            self.user_fashion_news_frequency_embedding
+            self.encoder.user_fashion_news_frequency_embedding
             [customer_fashion_news_frequency_batch, :]) + (
-            self.user_postal_code_embedding[customer_postal_code_batch, :]
+            self.encoder.user_postal_code_embedding[
+                customer_postal_code_batch, :]
         )
         transformed_features = forward_NN(self.user_net, features)
         if skip:
@@ -148,9 +136,9 @@ class HMModel(NamedTuple):
                                articles_section_name,
                                articles_garment_group):
         '''Computes the item embedding vectors.'''
-        features = (self.color_group_embeddings[articles_color_group] +
-                    self.section_name_embeddings[articles_section_name] +
-                    self.garment_group_embeddings[articles_garment_group]
+        features = (self.encoder.color_group_embeddings[articles_color_group] +
+                    self.encoder.section_name_embeddings[articles_section_name] +
+                    self.encoder.garment_group_embeddings[articles_garment_group]
                     )
         transformed_features = forward_NN(self.item_net, features)
-        return (self.item_embeddings + transformed_features)
+        return (self.encoder.item_embeddings + transformed_features)

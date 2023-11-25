@@ -14,7 +14,7 @@ from hm_model import HMModel, compute_pe_matrix
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
-_EPOCH_EXAMPLES = 256000
+_EPOCH_EXAMPLES = 2560
 _BATCH = 128
 _LR = 0.5e-4
 _LAMBDA = 1e-3
@@ -63,7 +63,6 @@ if args.start_epoch == -1:
     print(f'Initializing parameters for {n_articles} items {n_users} users')
     model_parameters = HMModel.factory(
         rng_key=key,
-        n_users=n_users,
         n_articles=n_articles,
         n_color_groups=n_color_groups,
         n_section_names=n_section_names,
