@@ -1,8 +1,9 @@
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
-from ..hm_encoder import HMEncoder
-
+import sys
+sys.path.append('../common')
+from hm_encoder import HMEncoder  # noqa
 
 _DIM = 32
 _ITEM_NET_HIDDEN_DIM = 32
