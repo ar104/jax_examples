@@ -1,7 +1,7 @@
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
-from hm_encoder import HMEncoder
+from ..hm_encoder import HMEncoder
 
 
 _DIM = 32
