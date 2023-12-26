@@ -104,6 +104,11 @@ class SelfAttention(NamedTuple):
                 transformed_embeddings, (transformed_embeddings.shape[0], -1))
             transformed_embedding = jnp.einsum(
                 'vx, bx->bv', self.W_O, transformed_embeddings)
+            transformed_embedding = jnp.einsum(
+                'bv, vf->bf', transformed_embedding, self.FF1)
+            transformed_embedding = jax.nn.relu(transformed_embedding)
+            transformed_embedding = jnp.einsum(
+                'bf, fv->bv', transformed_embedding, self.FF2)
             transformed_embedding = jnp.expand_dims(
                 transformed_embedding, axis=1)
             new_embeddings.append(transformed_embedding)
