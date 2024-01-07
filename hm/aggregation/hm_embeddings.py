@@ -11,8 +11,9 @@ import sys
 import time
 from tqdm import tqdm
 
-sys.path.append('../common')
-from hm_model import HMModel, compute_pe_matrix   # noqa
+sys.path.append('../common')    # noqa
+from hm_model import HMModel, _DIM   # noqa
+from hm_encoder import compute_pe_matrix    # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
@@ -193,7 +194,7 @@ else:
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 start_epoch = max(0, args.start_epoch)
-pe_matrix = compute_pe_matrix()
+pe_matrix = compute_pe_matrix(_DIM)
 for epoch in range(start_epoch, 100):
     train_indices = jax.random.choice(
         key + epoch, items.shape[0],

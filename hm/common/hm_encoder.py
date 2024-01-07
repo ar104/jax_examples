@@ -2,6 +2,8 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+_MAX_DAYS = 5000
+
 
 class HMEncoder(NamedTuple):
     user_age_vector: jnp.ndarray
@@ -52,3 +54,13 @@ class HMEncoder(NamedTuple):
             user_active_vector=jax.random.normal(
                 split_keys[9], shape=(dim,)) / 100,
         )
+
+
+def compute_pe_matrix(dim):
+    pe = jnp.zeros(shape=(_MAX_DAYS, dim))
+    position = jnp.arange(0, _MAX_DAYS, dtype=jnp.float32)
+    div_term = jnp.exp(jnp.arange(0, dim, 2)*(-jnp.log(10000.0))/dim)
+    product = jnp.einsum('i,j->ij', position, div_term)
+    pe = pe.at[:, 0::2].set(jnp.sin(product))
+    pe = pe.at[:, 1::2].set(jnp.cos(product))
+    return pe

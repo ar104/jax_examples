@@ -8,8 +8,9 @@ import sys
 from tqdm import tqdm
 import time
 
-sys.path.append('../common')
-from hm_model import HMModel, compute_pe_matrix   # noqa
+sys.path.append('../common')   # noqa
+from hm_model import HMModel, _DIM   # noqa
+from hm_encoder import compute_pe_matrix   # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _EMBEDDINGS = _DATASET + '/embeddings_0.pickle'
@@ -105,7 +106,7 @@ item_freq = defaultdict(lambda: 0)
 sum_precision = None
 sum_ap = None
 count_precision = 0
-pe_matrix = compute_pe_matrix()
+pe_matrix = compute_pe_matrix(_DIM)
 with open(_DATASET + '/predictions.csv', 'w') as predictions:
     predictions.write('customer_id,prediction\n')
     seq_items_batch = []
