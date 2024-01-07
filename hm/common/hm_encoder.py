@@ -55,6 +55,33 @@ class HMEncoder(NamedTuple):
                 split_keys[9], shape=(dim,)) / 100,
         )
 
+    def user_embedding(self,
+                       batch_user_ages,
+                       customer_fn_batch,
+                       customer_active_batch,
+                       customer_club_member_status_batch,
+                       customer_fashion_news_frequency_batch,
+                       customer_postal_code_batch):
+        '''Embeds a user using only the user features.'''
+        return (
+            jnp.expand_dims(batch_user_ages, axis=1) *
+            jnp.expand_dims(self.user_age_vector, axis=0)
+        ) + (
+            jnp.expand_dims(customer_fn_batch, axis=1) *
+            jnp.expand_dims(self.user_fn_vector, axis=0)
+        ) + (
+            jnp.expand_dims(customer_active_batch, axis=1) *
+            jnp.expand_dims(self.user_active_vector, axis=0)
+        ) + (
+            self.user_club_member_status_embedding
+            [customer_club_member_status_batch, :]
+        ) + (
+            self.user_fashion_news_frequency_embedding
+            [customer_fashion_news_frequency_batch, :]
+        ) + (
+            self.user_postal_code_embedding[customer_postal_code_batch, :]
+        )
+
 
 def compute_pe_matrix(dim):
     pe = jnp.zeros(shape=(_MAX_DAYS, dim))

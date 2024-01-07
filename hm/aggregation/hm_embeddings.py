@@ -12,8 +12,9 @@ import time
 from tqdm import tqdm
 
 sys.path.append('../common')    # noqa
-from hm_model import HMModel, _DIM   # noqa
+from hm_model import _DIM   # noqa
 from hm_encoder import compute_pe_matrix    # noqa
+from hm_aggregation import HMModel    # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
