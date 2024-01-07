@@ -7,12 +7,10 @@ from jaxopt import OptaxSolver
 import optax
 import pickle
 import random
-import sys
 import time
 from tqdm import tqdm
 
-sys.path.append('../common')
-from hm_model import HMModel, compute_pe_matrix   # noqa
+from hm_model import HMModel, compute_pe_matrix
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 

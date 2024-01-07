@@ -1,12 +1,15 @@
 import argparse
 from collections import defaultdict
 import pandas as pd
-from hm_model import HMModel, compute_pe_matrix
 import jax
 import jax.numpy as jnp
 import pickle
+import sys
 from tqdm import tqdm
 import time
+
+sys.path.append('../common')
+from hm_model import HMModel, compute_pe_matrix   # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 _EMBEDDINGS = _DATASET + '/embeddings_0.pickle'
