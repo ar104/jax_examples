@@ -7,10 +7,14 @@ from jaxopt import OptaxSolver
 import optax
 import pickle
 import random
+import sys
 import time
 from tqdm import tqdm
 
-from hm_model import HMModel, compute_pe_matrix
+sys.path.append('../common')    # noqa
+from hm_model import _DIM   # noqa
+from hm_encoder import compute_pe_matrix    # noqa
+from hm_aggregation import HMModel    # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
@@ -191,7 +195,7 @@ else:
 solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 start_epoch = max(0, args.start_epoch)
-pe_matrix = compute_pe_matrix()
+pe_matrix = compute_pe_matrix(_DIM)
 for epoch in range(start_epoch, 100):
     train_indices = jax.random.choice(
         key + epoch, items.shape[0],

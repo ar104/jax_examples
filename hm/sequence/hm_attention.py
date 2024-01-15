@@ -1,4 +1,4 @@
-# Implement a seq to seq transformation.
+# Implement a seq to seq transformation for predicting repeated purchases.
 # Follows "The annotated transformer" but in jax.
 
 import math
@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 
 _TRANSFORMER_EPSILON = 1e-6
-
 # Data shape = [(batch, #tokens, vector)]
 
 
