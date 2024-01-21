@@ -14,7 +14,7 @@ from tqdm import tqdm
 sys.path.append('../common')    # noqa
 from hm_model import _DIM   # noqa
 from hm_encoder import compute_pe_matrix    # noqa
-from hm_aggregation import HMModel    # noqa
+from hm_sequence import HMModel    # noqa
 
 _DATASET = 'C:\\Users\\aroym\\Downloads\\hm_data'
 
@@ -85,6 +85,7 @@ else:
 
 @partial(jax.jit, static_argnames=['batch_size'])
 def fwd_batch_opt_core(model_params,
+                       rng_key,
                        articles_color_group,
                        articles_section_name,
                        articles_garment_group,
@@ -94,13 +95,10 @@ def fwd_batch_opt_core(model_params,
                        customer_club_member_status_batch,
                        customer_fashion_news_frequency_batch,
                        customer_postal_code_batch,
-                       flat_items,
-                       flat_position_vectors,
-                       flat_items_map,
-                       seq_lengths_batch,
-                       flat_labels,
-                       flat_labels_map,
-                       batch_size):
+                       batch_items,
+                       batch_position_vectors,
+                       batch_repurchase_labels,
+                       ):
     # Modify item embeddings by input features.
     input_item_embeddings = model_params.item_embedding_vectors(
         articles_color_group=articles_color_group,
@@ -108,15 +106,11 @@ def fwd_batch_opt_core(model_params,
         articles_garment_group=articles_garment_group
     )
     # Modify user embeddings by input features and history.
-    history_embedding_vectors = model_params.history_embedding_vectors(
-        input_item_embeddings[flat_items, :] + flat_position_vectors)
-    user_history_vectors = jax.ops.segment_sum(
-        history_embedding_vectors,
-        flat_items_map,
-        num_segments=batch_size
-    ) / (jnp.expand_dims(seq_lengths_batch, axis=1) + _EPSILON)
+    history_embedding_vectors = model_params.attention_embedding_vectors(
+        rng_key,
+        input_item_embeddings[batch_items] + batch_position_vectors
+    )
     input_user_embeddings = model_params.user_embedding_vectors(
-        user_history_vectors,
         customer_ages_batch,
         customer_fn_batch,
         customer_active_batch,
@@ -124,15 +118,16 @@ def fwd_batch_opt_core(model_params,
         customer_fashion_news_frequency_batch,
         customer_postal_code_batch,
     )
-    # Note: negation in next line is reversed for positive examples
-    # in the following line to it.
-    logits = jnp.einsum('ij,kj->ki', input_item_embeddings,
-                        input_user_embeddings)
-    # Compute the softmax cross entropy loss.
-    log_numerator = logits[flat_labels_map, flat_labels]
-    log_denominator = jax.nn.logsumexp(logits, axis=1)[flat_labels_map]
-    # optimize negative log likelihood
-    nll = jnp.mean(log_denominator - log_numerator)
+    repurchase_logits = model_params.repurchase_logits(
+        input_user_embeddings, history_embedding_vectors
+    )
+    repurchase_probabilities = jax.nn.log_sigmoid(repurchase_logits)
+    positive_probabilities = jax.nn.log_sigmoid(repurchase_probabilities)
+    negative_probabilities = jax.nn.log_sigmoid(-repurchase_probabilities)
+    nll = -(
+        batch_repurchase_labels*positive_probabilities +
+        (1.0 - batch_repurchase_labels)*negative_probabilities
+    )
     return nll
 
 

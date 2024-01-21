@@ -89,9 +89,12 @@ class HMModel(NamedTuple):
         '''Computes the attention embedding vectors.'''
         return self.attention_block.forward(rng_key, batch_history_vectors)
 
-    def repurchase_logits(self, sequence_vectors):
+    def repurchase_logits(self, user_embeddings, sequence_vectors):
         '''Computes logits for repurchase probabilities'''
-        return forward_NN(self.repurchase_net, sequence_vectors)
+        return forward_NN(
+            self.repurchase_net,
+            jax.numpy.unsqueeze(user_embeddings, axis=1) + sequence_vectors
+        )
 
     def item_embedding_vectors(self,
                                articles_color_group,
