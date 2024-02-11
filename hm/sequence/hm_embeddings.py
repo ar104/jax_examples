@@ -23,7 +23,7 @@ _BATCH = 128
 _LR = 0.5e-4
 _LAMBDA = 1e-3
 _EPSILON = 1e-6
-
+_MAX_SEQ_LENGTH = 256
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--optimizer', type=str, default='Adam', help='SGD or Adam')
@@ -73,7 +73,8 @@ if args.start_epoch == -1:
         n_garment_groups=n_garment_groups,
         n_user_club_member_status=n_customer_club_member_status,
         n_user_fashion_news_frequency=n_customer_fashion_news_frequency,
-        n_user_postal_code=n_customer_postal_code)
+        n_user_postal_code=n_customer_postal_code,
+        max_seq_length=256)
 else:
     print(f'Loading embeddings from checkpoint.')
     with open(f'{_DATASET}/embeddings_{args.start_epoch}.pickle', 'rb') as f:
@@ -97,15 +98,13 @@ def fwd_batch_opt_core(model_params,
                        customer_postal_code_batch,
                        batch_items,
                        batch_position_vectors,
-                       batch_repurchase_labels,
-                       ):
+                       batch_repurchase_labels):
     # Modify item embeddings by input features.
     input_item_embeddings = model_params.item_embedding_vectors(
         articles_color_group=articles_color_group,
         articles_section_name=articles_section_name,
         articles_garment_group=articles_garment_group
     )
-    # Modify user embeddings by input features and history.
     history_embedding_vectors = model_params.attention_embedding_vectors(
         rng_key,
         input_item_embeddings[batch_items] + batch_position_vectors
@@ -122,8 +121,10 @@ def fwd_batch_opt_core(model_params,
         input_user_embeddings, history_embedding_vectors
     )
     repurchase_probabilities = jax.nn.log_sigmoid(repurchase_logits)
-    positive_probabilities = jax.nn.log_sigmoid(repurchase_probabilities)
-    negative_probabilities = jax.nn.log_sigmoid(-repurchase_probabilities)
+    positive_probabilities = jnp.squeeze(
+        jax.nn.log_sigmoid(repurchase_probabilities))
+    negative_probabilities = jnp.squeeze(
+        jax.nn.log_sigmoid(-repurchase_probabilities))
     nll = -(
         batch_repurchase_labels*positive_probabilities +
         (1.0 - batch_repurchase_labels)*negative_probabilities
@@ -133,6 +134,7 @@ def fwd_batch_opt_core(model_params,
 
 # Not jittable due to dynamic repeat.
 def fwd_batch_opt(params: HMModel,
+                  rng_key,
                   customer_ages_batch,
                   customer_fn_batch,
                   customer_active_batch,
@@ -142,20 +144,14 @@ def fwd_batch_opt(params: HMModel,
                   articles_color_group,
                   articles_section_name,
                   articles_garment_group,
-                  seq_labels_batch,
-                  seq_labels_count_batch,
                   seq_history_batch,
                   seq_position_vectors_batch,
-                  seq_lengths_batch: jnp.ndarray):
-    batch_size = len(seq_history_batch)
+                  batch_repurchase_labels):
     # Flatten items from all examples into a single vector.
-    flat_items = jnp.concatenate(seq_history_batch, axis=0)
-    flat_position_vectors = jnp.concatenate(seq_position_vectors_batch, axis=0)
-    flat_items_map = jnp.repeat(jnp.arange(batch_size), seq_lengths_batch)
-    flat_labels = jnp.concatenate(seq_labels_batch, axis=0)
-    flat_labels_map = jnp.repeat(
-        jnp.arange(batch_size), jnp.asarray(seq_labels_count_batch))
+    flat_items = jnp.stack(seq_history_batch, axis=0)
+    flat_position_vectors = jnp.stack(seq_position_vectors_batch, axis=0)
     return fwd_batch_opt_core(params,
+                              rng_key,
                               # Item features.
                               articles_color_group,
                               articles_section_name,
@@ -170,13 +166,8 @@ def fwd_batch_opt(params: HMModel,
                               # Transactions.
                               flat_items,
                               flat_position_vectors,
-                              flat_items_map,
-                              seq_lengths_batch,
                               # Labels
-                              flat_labels,
-                              flat_labels_map,
-                              # batch size - dynamic jit
-                              customer_ages_batch.shape[0])
+                              batch_repurchase_labels)
 
 
 # Initialize optimizer.
@@ -191,7 +182,9 @@ solver = OptaxSolver(opt=opt, fun=fwd_batch_opt)
 solver_initialized = False
 start_epoch = max(0, args.start_epoch)
 pe_matrix = compute_pe_matrix(_DIM)
+epoch_key = jax.random.PRNGKey(0xf22)
 for epoch in range(start_epoch, 100):
+    epoch_key, this_epoch_key = jax.random.split(epoch_key)
     train_indices = jax.random.choice(
         key + epoch, items.shape[0],
         (_EPOCH_EXAMPLES,))
@@ -229,8 +222,15 @@ for epoch in range(start_epoch, 100):
                 seq_timestamps.append(root_timestamp - timestamps[index][i])
             elif (timestamps[index][i] - root_timestamp) < 16:
                 seq_labels.append(items[index][i])
+        padding = _MAX_SEQ_LENGTH - len(seq_history)
         seq_labels_batch.append(
-            jnp.asarray([random.choice(seq_labels)], dtype=jnp.int32))
+            jnp.asarray([1 if l in seq_labels else 0 for l in seq_history] +
+                        [0]*padding,
+                        dtype=jnp.int32
+                        )
+        )
+        seq_history.extend([0]*padding)
+        seq_timestamps.extend([0]*padding)
         seq_labels_count_batch.append(1)
         seq_history_batch.append(jnp.asarray(seq_history, dtype=jnp.int32))
         seq_position_vectors_batch.append(pe_matrix[seq_timestamps, :])
@@ -267,6 +267,7 @@ for epoch in range(start_epoch, 100):
             if solver_initialized:
                 model_parameters, state = solver.update(
                     params=model_parameters, state=state,
+                    rng_key=this_epoch_key,
                     customer_ages_batch=customer_ages_batch_array,
                     customer_fn_batch=customer_fn_batch_array,
                     customer_active_batch=customer_active_batch_array,
@@ -276,14 +277,13 @@ for epoch in range(start_epoch, 100):
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
-                    seq_labels_batch=seq_labels_batch,
-                    seq_labels_count_batch=seq_labels_count_batch,
-                    seq_history_batch=seq_history_batch,
-                    seq_position_vectors_batch=seq_position_vectors_batch,
-                    seq_lengths_batch=seq_lengths_batch_array)
+                    seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_position_vectors_batch=jnp.stack(
+                        seq_position_vectors_batch, axis=0),
+                    batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
             else:
                 state = solver.init_state(
-                    init_params=model_parameters,
+                    init_params=model_parameters, rng_key=this_epoch_key,
                     customer_ages_batch=customer_ages_batch_array,
                     customer_fn_batch=customer_fn_batch_array,
                     customer_active_batch=customer_active_batch_array,
@@ -293,17 +293,18 @@ for epoch in range(start_epoch, 100):
                     articles_color_group=articles_color_group,
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
-                    seq_labels_batch=seq_labels_batch,
-                    seq_labels_count_batch=seq_labels_count_batch,
-                    seq_history_batch=seq_history_batch,
-                    seq_position_vectors_batch=seq_position_vectors_batch,
-                    seq_lengths_batch=seq_lengths_batch_array)
+                    seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_position_vectors_batch=jnp.stack(
+                        seq_position_vectors_batch, axis=0),
+                    batch_repurchase_labels=jnp.stack(
+                        seq_labels_batch, axis=0))
                 solver_initialized = True
             batches += 1
             # Update displayed loss.
             if batches % 1 == 0:
                 loss = fwd_batch_opt(
                     model_parameters,
+                    this_epoch_key,
                     customer_ages_batch_array,
                     customer_fn_batch_array,
                     customer_active_batch_array,
@@ -313,11 +314,10 @@ for epoch in range(start_epoch, 100):
                     articles_color_group,
                     articles_section_name,
                     articles_garment_group,
-                    seq_labels_batch,
-                    seq_labels_count_batch,
-                    seq_history_batch,
-                    seq_position_vectors_batch,
-                    seq_lengths_batch_array)
+                    seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_position_vectors_batch=jnp.stack(
+                        seq_position_vectors_batch, axis=0),
+                    batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
                 if sum_loss is None:
                     sum_loss = loss
                 else:
@@ -347,21 +347,16 @@ for epoch in range(start_epoch, 100):
         customer_postal_code_batch_array = jnp.asarray(
             customer_postal_code_batch)
         loss = fwd_batch_opt(
-            model_parameters,
-            customer_ages_batch_array,
-            customer_fn_batch_array,
-            customer_active_batch_array,
+            model_parameters, this_epoch_key, customer_ages_batch_array,
+            customer_fn_batch_array, customer_active_batch_array,
             customer_club_member_status_batch_array,
             customer_fashion_news_frequency_batch_array,
-            customer_postal_code_batch_array,
-            articles_color_group,
-            articles_section_name,
-            articles_garment_group,
-            seq_labels_batch,
-            seq_labels_count_batch,
-            seq_history_batch,
-            seq_position_vectors_batch,
-            seq_lengths_batch_array)
+            customer_postal_code_batch_array, articles_color_group,
+            articles_section_name, articles_garment_group,
+            seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+            seq_position_vectors_batch=jnp.stack(
+                seq_position_vectors_batch, axis=0),
+            batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
         loss = (loss/seq_lengths_batch_array.shape[0])
         if sum_loss is None:
             sum_loss = loss

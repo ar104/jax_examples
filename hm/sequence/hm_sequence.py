@@ -1,5 +1,6 @@
 import jax
 import hm_attention
+import sys
 from typing import NamedTuple
 
 sys.path.append('../common')    # noqa
@@ -13,12 +14,12 @@ from hm_model import (
 )   # noqa
 from hm_encoder import HMEncoder, compute_pe_matrix    # noqa
 
-_HEADS = 3
+_HEADS = 1
 _RATE = 0.3
 
 
 def create_attention_block(rng_key, seq_length):
-    object_creation_key, random_key = jax.random.split(random_key)
+    object_creation_key, rng_key = jax.random.split(rng_key)
     attention_block = hm_attention.SelfAttention.factory(
         object_creation_key, dim_io=_DIM, dim_ff=_DIM, num_heads=_HEADS)
     norm = hm_attention.LayerNorm.factory(max_tokens=seq_length)
@@ -93,7 +94,7 @@ class HMModel(NamedTuple):
         '''Computes logits for repurchase probabilities'''
         return forward_NN(
             self.repurchase_net,
-            jax.numpy.unsqueeze(user_embeddings, axis=1) + sequence_vectors
+            jax.numpy.expand_dims(user_embeddings, axis=1) + sequence_vectors
         )
 
     def item_embedding_vectors(self,

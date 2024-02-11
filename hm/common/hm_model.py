@@ -35,9 +35,9 @@ class NN(NamedTuple):
 
 
 def forward_NN(nn: NN, input: jnp.ndarray) -> jnp.ndarray:
-    x = jnp.einsum('bf,hf->bh', input,  nn.input_layer)
+    x = jax.numpy.inner(input, nn.input_layer)
     x = jax.nn.relu(x)
-    x = jnp.einsum('bh,jh->bj', x, nn.hidden_layer)
+    x = jax.numpy.inner(x, nn.hidden_layer)
     x = jax.nn.relu(x)
-    x = jnp.einsum('bj,oj->bo', x, nn.output_layer)
+    x = jax.numpy.inner(x, nn.output_layer)
     return x
