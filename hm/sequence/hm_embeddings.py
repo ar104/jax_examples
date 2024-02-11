@@ -84,7 +84,7 @@ else:
 ##########################################################
 
 
-@partial(jax.jit, static_argnames=['batch_size'])
+# @partial(jax.jit, static_argnames=['batch_size'])
 def fwd_batch_opt_core(model_params,
                        rng_key,
                        articles_color_group,
@@ -120,12 +120,11 @@ def fwd_batch_opt_core(model_params,
     repurchase_logits = model_params.repurchase_logits(
         input_user_embeddings, history_embedding_vectors
     )
-    repurchase_probabilities = jax.nn.log_sigmoid(repurchase_logits)
     positive_probabilities = jnp.squeeze(
-        jax.nn.log_sigmoid(repurchase_probabilities))
+        jax.nn.log_sigmoid(repurchase_logits))
     negative_probabilities = jnp.squeeze(
-        jax.nn.log_sigmoid(-repurchase_probabilities))
-    nll = -(
+        jax.nn.log_sigmoid(-repurchase_logits))
+    nll = -jnp.sum(
         batch_repurchase_labels*positive_probabilities +
         (1.0 - batch_repurchase_labels)*negative_probabilities
     )

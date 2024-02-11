@@ -24,8 +24,11 @@ def encode_numerical(df, col_name):
     col_min = df[col_name].min()
     col_max = df[col_name].max()
     col_mean = df[col_name].mean()
-    df[col_name] = (
-        df[col_name].fillna(col_mean) - col_min)/(col_max - col_min)
+    if abs(col_min - col_max) < 1e-6:
+        df[col_name] = 0.5
+    else:
+        df[col_name] = (
+            df[col_name].fillna(col_mean) - col_min)/(col_max - col_min)
     print(f'Encoded column {col_name} between '
           f'minimum {col_min} and maximum {col_max}')
 
@@ -141,7 +144,6 @@ customer_postal_code = np.array(customer_postal_code)
 articles_colour_group_name = np.array(df_articles['colour_group_name'])
 articles_section_name = np.array(df_articles['section_name'])
 articles_garment_group_name = np.array(df_articles['garment_group_name'])
-
 np.savez(_DATASET + '/tensors_history.npz',
          items=items,
          timestamps=timestamps,
