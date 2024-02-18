@@ -97,6 +97,7 @@ def fwd_batch_opt_core(model_params,
                        customer_fashion_news_frequency_batch,
                        customer_postal_code_batch,
                        batch_items,
+                       masks,
                        batch_position_vectors,
                        batch_repurchase_labels):
     # Modify item embeddings by input features.
@@ -107,7 +108,8 @@ def fwd_batch_opt_core(model_params,
     )
     history_embedding_vectors = model_params.attention_embedding_vectors(
         rng_key,
-        input_item_embeddings[batch_items] + batch_position_vectors
+        input_item_embeddings[batch_items] + batch_position_vectors,
+        masks
     )
     input_user_embeddings = model_params.user_embedding_vectors(
         customer_ages_batch,
@@ -120,6 +122,7 @@ def fwd_batch_opt_core(model_params,
     repurchase_logits = model_params.repurchase_logits(
         input_user_embeddings, history_embedding_vectors
     )
+    repurchase_logits += jnp.expand_dims(jnp.where(masks, 0.0, -1e9), axis=-1)
     positive_probabilities = jnp.squeeze(
         jax.nn.log_sigmoid(repurchase_logits))
     negative_probabilities = jnp.squeeze(
@@ -144,11 +147,9 @@ def fwd_batch_opt(params: HMModel,
                   articles_section_name,
                   articles_garment_group,
                   seq_history_batch,
+                  seq_masks_batch,
                   seq_position_vectors_batch,
                   batch_repurchase_labels):
-    # Flatten items from all examples into a single vector.
-    flat_items = jnp.stack(seq_history_batch, axis=0)
-    flat_position_vectors = jnp.stack(seq_position_vectors_batch, axis=0)
     return fwd_batch_opt_core(params,
                               rng_key,
                               # Item features.
@@ -163,8 +164,9 @@ def fwd_batch_opt(params: HMModel,
                               customer_fashion_news_frequency_batch,
                               customer_postal_code_batch,
                               # Transactions.
-                              flat_items,
-                              flat_position_vectors,
+                              seq_history_batch,
+                              seq_masks_batch,
+                              seq_position_vectors_batch,
                               # Labels
                               batch_repurchase_labels)
 
@@ -194,8 +196,9 @@ for epoch in range(start_epoch, 100):
     sum_loss = None
     items_loss = 0
     seq_labels_batch = []
-    seq_labels_count_batch = []
+    seq_labels_count_batch = 0
     seq_history_batch = []
+    seq_masks_batch = []
     seq_position_vectors_batch = []
     seq_lengths_batch = []
     user_indices_batch = []
@@ -215,9 +218,11 @@ for epoch in range(start_epoch, 100):
         seq_history = []
         seq_labels = []
         seq_timestamps = []
+        seq_masks = []
         for i in range(seq_lengths[index]):
             if timestamps[index][i] < root_timestamp:
                 seq_history.append(items[index][i])
+                seq_masks.append(1)
                 seq_timestamps.append(root_timestamp - timestamps[index][i])
             elif (timestamps[index][i] - root_timestamp) < 16:
                 seq_labels.append(items[index][i])
@@ -229,9 +234,11 @@ for epoch in range(start_epoch, 100):
                         )
         )
         seq_history.extend([0]*padding)
+        seq_masks.extend([0]*padding)
         seq_timestamps.extend([0]*padding)
-        seq_labels_count_batch.append(1)
+        seq_labels_count_batch += len(seq_history)
         seq_history_batch.append(jnp.asarray(seq_history, dtype=jnp.int32))
+        seq_masks_batch.append(jnp.asarray(seq_masks, dtype=jnp.int32))
         seq_position_vectors_batch.append(pe_matrix[seq_timestamps, :])
         seq_lengths_batch.append(len(seq_history))
         user_indices_batch.append(index)
@@ -277,6 +284,7 @@ for epoch in range(start_epoch, 100):
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
                     seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_masks_batch=jnp.stack(seq_masks_batch, axis=0),
                     seq_position_vectors_batch=jnp.stack(
                         seq_position_vectors_batch, axis=0),
                     batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
@@ -293,6 +301,7 @@ for epoch in range(start_epoch, 100):
                     articles_section_name=articles_section_name,
                     articles_garment_group=articles_garment_group,
                     seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_masks_batch=jnp.stack(seq_masks_batch, axis=0),
                     seq_position_vectors_batch=jnp.stack(
                         seq_position_vectors_batch, axis=0),
                     batch_repurchase_labels=jnp.stack(
@@ -314,20 +323,22 @@ for epoch in range(start_epoch, 100):
                     articles_section_name,
                     articles_garment_group,
                     seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+                    seq_masks_batch=jnp.stack(seq_masks_batch, axis=0),
                     seq_position_vectors_batch=jnp.stack(
                         seq_position_vectors_batch, axis=0),
                     batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
                 if sum_loss is None:
-                    sum_loss = loss
+                    sum_loss = loss / seq_labels_count_batch
                 else:
-                    sum_loss += loss
+                    sum_loss += loss / seq_labels_count_batch
                 items_loss += 1
                 pbar.set_description(
                     f'epoch {epoch} avg loss {sum_loss/items_loss:.4f}')
             seq_history_batch = []
+            seq_masks_batch = []
             seq_position_vectors_batch = []
             seq_labels_batch = []
-            seq_labels_count_batch = []
+            seq_labels_count_batch = 0
     # Avoid possible memory leak.
     jax.clear_caches()
     gc.collect()
@@ -353,14 +364,14 @@ for epoch in range(start_epoch, 100):
             customer_postal_code_batch_array, articles_color_group,
             articles_section_name, articles_garment_group,
             seq_history_batch=jnp.stack(seq_history_batch, axis=0),
+            seq_masks_batch=jnp.stack(seq_masks_batch, axis=0),
             seq_position_vectors_batch=jnp.stack(
                 seq_position_vectors_batch, axis=0),
             batch_repurchase_labels=jnp.stack(seq_labels_batch, axis=0))
-        loss = (loss/seq_lengths_batch_array.shape[0])
         if sum_loss is None:
-            sum_loss = loss
+            sum_loss = loss / seq_labels_count_batch
         else:
-            sum_loss += loss
+            sum_loss += loss / seq_labels_count_batch
         items_loss += 1
     print(f'Epoch = {epoch} loss = {sum_loss/items_loss:.4f}')
     with open(f'{_DATASET}/embeddings_{epoch}.pickle', 'wb') as f:

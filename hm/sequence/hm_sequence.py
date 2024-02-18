@@ -86,9 +86,11 @@ class HMModel(NamedTuple):
 
     def attention_embedding_vectors(self,
                                     rng_key,
-                                    batch_history_vectors):
+                                    batch_history_vectors,
+                                    mask):
         '''Computes the attention embedding vectors.'''
-        return self.attention_block.forward(rng_key, batch_history_vectors)
+        return self.attention_block.forward(
+            rng_key, batch_history_vectors, mask)
 
     def repurchase_logits(self, user_embeddings, sequence_vectors):
         '''Computes logits for repurchase probabilities'''

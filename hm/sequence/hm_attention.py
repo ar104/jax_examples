@@ -85,7 +85,7 @@ class SelfAttention(NamedTuple):
             ),
         )
 
-    def forward(self, input):
+    def forward(self, input, mask):
         queries = jnp.einsum('hvi,bwv->bhwi', self.W_Q, input)
         keys = jnp.einsum('hvi,bwv->bhwi', self.W_K, input)
         values = jnp.einsum('hvi,bwv->bhwi', self.W_V, input)
@@ -95,6 +95,9 @@ class SelfAttention(NamedTuple):
             logits = jnp.einsum(
                 'bhi,bhwi->bhw', queries[:, :, word, :], keys[:, :, :, :])
             logits = logits / math.sqrt(queries.shape[-1])
+            logits = logits + jnp.where(
+                jnp.expand_dims(mask, axis=1), 0.0, -1e9
+            )  # mask logits.
             weights = jax.nn.softmax(logits, axis=-1)
             weights = jnp.expand_dims(weights, axis=-1)
             transformed_embeddings = jnp.sum(
@@ -120,9 +123,10 @@ class Block(NamedTuple):
     self_attention: SelfAttention
     rate: float
 
-    def forward(self, usable_subkey, input: jnp.ndarray):
+    def forward(self, usable_subkey, input: jnp.ndarray, mask: jnp.ndarray):
         attention_result = self.self_attention.forward(
-            self.norm.forward(input)
+            self.norm.forward(input),
+            mask
         )
         keep = jax.random.bernoulli(
             usable_subkey, self.rate, attention_result.shape)
